@@ -3,9 +3,9 @@ import { ShotFrame } from '../types';
 export class Timeline {
   private frames: ShotFrame[] = [];
   private currentFrameIndex: number = 0;
-  private isPlaying: boolean = false;
+  public isPlaying: boolean = false;
   private playIntervalId: number | null = null;
-  private onRenderFrameCallback: (frame: ShotFrame) => void;
+  private onRenderFrameCallback: (frame: ShotFrame, index: number, frames: ShotFrame[]) => void;
   private onCleanBoreCallback: () => void;
 
   // DOM Elements
@@ -22,7 +22,7 @@ export class Timeline {
   private statVelocity = document.getElementById('stat-velocity') as HTMLSpanElement;
 
   constructor(
-    onRender: (frame: ShotFrame) => void,
+    onRender: (frame: ShotFrame, index: number, frames: ShotFrame[]) => void,
     onCleanBore: () => void
   ) {
     this.onRenderFrameCallback = onRender;
@@ -111,6 +111,6 @@ export class Timeline {
     this.statVelocity.textContent = `${frame.projectileVelocity.toFixed(1)} m/s`;
 
     // Fire canvas render callback
-    this.onRenderFrameCallback(frame);
+    this.onRenderFrameCallback(frame, this.currentFrameIndex, this.frames);
   }
 }

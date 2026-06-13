@@ -10,12 +10,6 @@ export class ControlsPanel {
   private valRefinement = document.getElementById('val-refinement') as HTMLSpanElement;
   private selectProjectile = document.getElementById('select-projectile') as HTMLSelectElement;
   private selectSealing = document.getElementById('select-sealing') as HTMLSelectElement;
-  private sliderHumidity = document.getElementById('slider-humidity') as HTMLInputElement;
-  private valHumidity = document.getElementById('val-humidity') as HTMLSpanElement;
-  private sliderWind = document.getElementById('slider-wind') as HTMLInputElement;
-  private valWind = document.getElementById('val-wind') as HTMLSpanElement;
-  private sliderRain = document.getElementById('slider-rain') as HTMLInputElement;
-  private valRain = document.getElementById('val-rain') as HTMLSpanElement;
   private btnFire = document.getElementById('btn-fire') as HTMLButtonElement;
 
   constructor(onFire: (inputs: ShotInput) => void) {
@@ -27,18 +21,6 @@ export class ControlsPanel {
     // Sync slider value text readouts
     this.sliderRefinement.addEventListener('input', () => {
       this.valRefinement.textContent = `${this.sliderRefinement.value}%`;
-    });
-
-    this.sliderHumidity.addEventListener('input', () => {
-      this.valHumidity.textContent = `${this.sliderHumidity.value}%`;
-    });
-
-    this.sliderWind.addEventListener('input', () => {
-      this.valWind.textContent = `${this.sliderWind.value}%`;
-    });
-
-    this.sliderRain.addEventListener('input', () => {
-      this.valRain.textContent = `${this.sliderRain.value}%`;
     });
 
     // Handle Fire click
@@ -55,16 +37,17 @@ export class ControlsPanel {
       refinementLevel: parseFloat(this.sliderRefinement.value),
       projectileType: this.selectProjectile.value,
       sealingQuality: this.selectSealing.value,
-      weatherHumidity: parseFloat(this.sliderHumidity.value),
-      weatherWind: parseFloat(this.sliderWind.value),
-      weatherRain: parseFloat(this.sliderRain.value),
-      seed: BigInt(Math.floor(Math.random() * 1000000)) as any, // wasm-bindgen handles u64 seed as BigInt
+      weatherHumidity: 0.0,
+      weatherWind: 0.0,
+      weatherRain: 0.0,
+      primingQuality: 100.0,
+      seed: BigInt(Math.floor(Math.random() * 1000000)) as any,
     };
   }
 
   public setFiringState(firing: boolean) {
     this.btnFire.disabled = firing;
-    this.btnFire.textContent = firing ? 'SIMULATING...' : '🔥 FIRE TEST SHOT';
     this.btnFire.style.opacity = firing ? '0.6' : '1';
+    this.btnFire.textContent = firing ? 'SIMULATING...' : '🔥 FIRE TEST SHOT';
   }
 }

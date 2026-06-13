@@ -44,16 +44,16 @@ impl BarrelProperties {
         }
     }
 
-    /// Calculate maximum hoop stress at the inner wall using Lamé equations for thick-walled cylinders.
+    /// Calculate the von Mises stress at the inner wall using closed-cylinder equations for thick-walled cylinders.
     /// Returns stress in MPa.
-    pub fn calculate_hoop_stress(&self, pressure_mpa: f64) -> f64 {
+    pub fn calculate_von_mises_stress(&self, pressure_mpa: f64) -> f64 {
         if pressure_mpa <= 0.0 {
             return 0.0;
         }
         let ri_sq = self.r_inner * self.r_inner;
         let ro_sq = self.r_outer * self.r_outer;
         
-        let nominal_stress = pressure_mpa * (ro_sq + ri_sq) / (ro_sq - ri_sq);
+        let nominal_stress = pressure_mpa * (3.0_f64.sqrt() * ro_sq) / (ro_sq - ri_sq);
         nominal_stress * self.flaw_factor
     }
 

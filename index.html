@@ -52,6 +52,193 @@
           </div>
         </div>
       </div>
+
+      <div class="chemistry-card">
+        <div class="chemistry-header">
+          <h2 class="panel-title" style="margin: 0; border: none; padding: 0;">🜁 Tabula Alchimica</h2>
+          <div class="chemistry-tabs">
+            <button id="tab-btn-instruments" class="chem-tab-btn active">🜍 Instruments</button>
+            <button id="tab-btn-ledger" class="chem-tab-btn">🜏 Ledger</button>
+            <button id="tab-btn-charts" class="chem-tab-btn">🜁 Telemetry Charts</button>
+          </div>
+        </div>
+        
+        <!-- Tab 1: Instruments -->
+        <div id="chem-tab-instruments" class="chem-tab-content active">
+          <div class="chemistry-grid">
+            <!-- Widget 1: Tria Prima Ternary Plot -->
+            <div class="chem-widget-card">
+              <h3>fig 3. Tria Prima Balance (Reactants)</h3>
+              <div class="ternary-plot-container">
+                <svg id="svg-tria-prima" viewBox="0 0 160 140" width="100%" height="100%">
+                  <!-- Triangle base paths -->
+                  <polygon points="80,15 20,120 140,120" stroke="#8c7662" stroke-width="1.5" fill="none" />
+                  <!-- Apexes labels -->
+                  <text x="80" y="10" class="svg-label" text-anchor="middle">🜔 Nitrum (Saltpeter)</text>
+                  <text x="10" y="132" class="svg-label" text-anchor="start">🜍 Sulphur</text>
+                  <text x="150" y="132" class="svg-label" text-anchor="end">🜘 Carbo (Charcoal)</text>
+                  <!-- Reference French Ratio crosshair -->
+                  <circle cx="80" cy="95" r="4" stroke="rgba(140, 118, 98, 0.4)" stroke-dasharray="2,2" fill="none" />
+                  <line x1="80" y1="80" x2="80" y2="110" stroke="rgba(140, 118, 98, 0.4)" stroke-dasharray="2,2" />
+                  <!-- Current state marker -->
+                  <circle id="marker-tria-prima" cx="80" cy="90" r="5" fill="#ff9f1c" stroke="#fff" stroke-width="1" />
+                </svg>
+              </div>
+              <div class="chem-stats-readout">
+                <div>Nitrum: <span id="txt-ratio-saltpeter" class="monospace-stat">75.0%</span></div>
+                <div>Carbo: <span id="txt-ratio-charcoal" class="monospace-stat">15.0%</span></div>
+                <div>Sulphur: <span id="txt-ratio-sulfur" class="monospace-stat">10.0%</span></div>
+              </div>
+            </div>
+
+            <!-- Widget 2: Caloric Pyrometer -->
+            <div class="chem-widget-card">
+              <h3>fig 4. Caloric Pyrometer</h3>
+              <div class="pyrometer-container">
+                <svg id="svg-pyrometer" viewBox="0 0 80 180" width="100%" height="100%">
+                  <!-- Outer Thermometer frame -->
+                  <rect x="35" y="15" width="10" height="130" rx="5" stroke="#8c7662" stroke-width="2" fill="none" />
+                  <circle cx="40" cy="150" r="16" stroke="#8c7662" stroke-width="2" fill="none" />
+                  <!-- Dynamic columns fill -->
+                  <rect id="rect-pyro-fill" x="37" y="140" width="6" height="0" fill="url(#grad-fire)" />
+                  <circle cx="40" cy="150" r="13" fill="#ff3c00" />
+                  <!-- Roman numerals & graduation ticks -->
+                  <!-- IV: Ignis Verticalis > 2400 K -->
+                  <line x1="25" y1="25" x2="33" y2="25" stroke="#6e5e4f" stroke-width="1" />
+                  <text x="20" y="28" class="pyro-numeral" text-anchor="end">IV</text>
+                  
+                  <!-- III: Ignis Flammae 2000 K -->
+                  <line x1="25" y1="60" x2="33" y2="60" stroke="#6e5e4f" stroke-width="1" />
+                  <text x="20" y="63" class="pyro-numeral" text-anchor="end">III</text>
+
+                  <!-- II: Ignis Solis 1000 K -->
+                  <line x1="25" y1="95" x2="33" y2="95" stroke="#6e5e4f" stroke-width="1" />
+                  <text x="20" y="98" class="pyro-numeral" text-anchor="end">II</text>
+
+                  <!-- I: Ignis Fatuus 300 K -->
+                  <line x1="25" y1="130" x2="33" y2="130" stroke="#6e5e4f" stroke-width="1" />
+                  <text x="20" y="133" class="pyro-numeral" text-anchor="end">I</text>
+                  
+                  <!-- Gradients definition -->
+                  <defs>
+                    <linearGradient id="grad-fire" x1="0" y1="1" x2="0" y2="0">
+                      <stop offset="0%" stop-color="#ff3c00" />
+                      <stop offset="60%" stop-color="#ff9f1c" />
+                      <stop offset="100%" stop-color="#fff" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <div class="chem-stats-readout pyrometer-stats">
+                <div class="heat-stage-label" id="txt-heat-stage">IGNIS FATUUS</div>
+                <div>Temperature: <span id="txt-temperature" class="monospace-stat">293.15 K</span></div>
+              </div>
+            </div>
+
+            <!-- Widget 3: Alembic Flask (Crucible) -->
+            <div class="chem-widget-card">
+              <h3>fig 5. The Alchemical Alembic</h3>
+              <div class="alembic-container">
+                <svg id="svg-alembic" viewBox="0 0 120 160" width="100%" height="100%">
+                  <!-- Flask silhouette -->
+                  <path d="M40,115 A28,28 0 0,0 80,115 A28,28 0 0,0 70,95 L70,55 A15,15 0 0,0 80,45 A20,20 0 0,0 40,45 A15,15 0 0,0 50,55 L50,95 A28,28 0 0,0 40,115" stroke="#8c7662" stroke-width="2" fill="none" />
+                  <!-- Dynamic solid powder level -->
+                  <path id="path-alembic-powder" d="M 33 118 A 28 28 0 0 0 87 118 Z" fill="#2d2d2d" stroke="none" />
+                  <!-- Dynamic combustion fire layer -->
+                  <ellipse id="ellipse-alembic-fire" cx="60" cy="110" rx="22" ry="6" fill="#ff9f1c" opacity="0" />
+                  <!-- Dynamic gas cloud -->
+                  <path id="path-alembic-gas" d="M 43 45 A 17 17 0 0 1 77 45 Z" fill="#ff9f1c" opacity="0" />
+                </svg>
+              </div>
+              <div class="chem-stats-readout">
+                <div>Solid Powder: <span id="txt-mass-unburned" class="monospace-stat">15.00 g</span></div>
+                <div>Chamber Gas: <span id="txt-mass-gas" class="monospace-stat">0.00 g</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Ledger -->
+        <div id="chem-tab-ledger" class="chem-tab-content">
+          <div class="ledger-tab-layout" style="display: flex; flex-direction: column; gap: 1.25rem; align-items: center; margin-top: 1rem;">
+            <!-- Widget 4: Gas Dynamics Ledger -->
+            <div class="chem-widget-card" style="width: 100%; max-width: 550px;">
+              <h3>fig 6. Mass Balance Ledger (15g Total)</h3>
+              <div class="ledger-container">
+                <table class="ledger-table">
+                  <thead>
+                    <tr>
+                      <th>Reactant / Product</th>
+                      <th>Mass (g)</th>
+                      <th>Fraction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>🜚 Unburned Powder</td>
+                      <td id="td-mass-unburned" class="monospace-stat">15.00</td>
+                      <td id="td-frac-unburned" class="monospace-stat">100.0%</td>
+                    </tr>
+                    <tr>
+                      <td>🜁 Active Gas inside Chamber</td>
+                      <td id="td-mass-gas" class="monospace-stat">0.00</td>
+                      <td id="td-frac-gas" class="monospace-stat">0.0%</td>
+                    </tr>
+                    <tr>
+                      <td>💨 Leaked Gas (Vent/Windage)</td>
+                      <td id="td-mass-leaked" class="monospace-stat">0.00</td>
+                      <td id="td-frac-leaked" class="monospace-stat">0.0%</td>
+                    </tr>
+                    <tr>
+                      <td>🜏 Solid Ash / Fouling</td>
+                      <td id="td-mass-fouling" class="monospace-stat">0.00</td>
+                      <td id="td-frac-fouling" class="monospace-stat">0.0%</td>
+                    </tr>
+                    <tr>
+                      <td>🜇 Ejected Smoke Particles</td>
+                      <td id="td-mass-smoke" class="monospace-stat">0.00</td>
+                      <td id="td-frac-smoke" class="monospace-stat">0.0%</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="ledger-total-row">
+                      <td>🜔 Total System Mass</td>
+                      <td id="td-mass-total" class="monospace-stat">15.00</td>
+                      <td class="monospace-stat">100.0%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            <!-- Stoichiometry formula section -->
+            <div class="stoich-formula-box" style="width: 100%; border: none; margin: 0; padding: 0;">
+              <div class="stoich-eq">
+                10 KNO₃ + 3 S + 8 C ➜ 2 K₂CO₃ + 3 K₂SO₄ + 6 CO₂↑ + 5 N₂↑
+              </div>
+              <p class="stoich-lore">
+                <em>Alchemical stoichiometry:</em> Standard black powder reactions yield roughly 45% gas product (expanding carbonic fumes and nitrogen spirit) and 55% solid residue (alkali carbonated salts, sulfate ash, and sulfurous crust). Saltpeter purity scales the gas yield; low purity produces heavy damp residue and slow, lethargic pressure.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Charts -->
+        <div id="chem-tab-charts" class="chem-tab-content">
+          <div class="charts-tab-layout" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div class="charts-container-box" style="width: 100%; background: #0c0a09; padding: 0.75rem; border: 1px solid var(--border-ink); border-radius: 3px;">
+              <canvas id="chem-charts-canvas" width="850" height="240" style="width: 100%; height: auto; display: block;"></canvas>
+            </div>
+            <div class="charts-legend" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem; font-family: var(--font-serif); font-size: 0.8rem; color: var(--text-dim);">
+              <span class="legend-item"><span class="legend-color" style="background-color: #d94e34; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 1px;"></span> Pressure (MPa)</span>
+              <span class="legend-item"><span class="legend-color" style="background-color: #ffb703; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 1px;"></span> Temperature (K)</span>
+              <span class="legend-item"><span class="legend-color" style="background-color: #a8947b; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 1px;"></span> Powder Mass (g)</span>
+              <span class="legend-item"><span class="legend-color" style="background-color: #e6c387; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 1px;"></span> Chamber Gas (g)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
     </section>
 
     <!-- Right Column: Lab Controls & Diagnosis -->
@@ -101,30 +288,6 @@
             <option value="tow" selected>Tow Packing (Coarse flax fibers)</option>
             <option value="clay">Clay Plug (Airtight seal, high friction)</option>
           </select>
-        </div>
-
-        <div class="control-group">
-          <label>Humidity / Ambient Moisture</label>
-          <div class="slider-input-container">
-            <input type="range" id="slider-humidity" min="0" max="100" value="30">
-            <span class="slider-value" id="val-humidity">30%</span>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>Wind Velocity</label>
-          <div class="slider-input-container">
-            <input type="range" id="slider-wind" min="0" max="100" value="15">
-            <span class="slider-value" id="val-wind">15%</span>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>Rain Severity</label>
-          <div class="slider-input-container">
-            <input type="range" id="slider-rain" min="0" max="100" value="0">
-            <span class="slider-value" id="val-rain">0%</span>
-          </div>
         </div>
 
         <button id="btn-fire" class="fire-btn">🔥 FIRE TEST SHOT</button>
