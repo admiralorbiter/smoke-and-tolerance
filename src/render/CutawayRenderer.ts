@@ -7,13 +7,17 @@ const BARREL_LIMITS: Record<string, { yield: number; ultimate: number }> = {
 };
 
 export class CutawayRenderer {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private cutawayCanvas: HTMLCanvasElement;
+  private cutawayCtx: CanvasRenderingContext2D;
+  private trajectoryCanvas: HTMLCanvasElement;
+  private trajectoryCtx: CanvasRenderingContext2D;
   private sootLevel: number = 0; // accumulated fouling level
 
-  constructor(canvasId: string) {
-    this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
+  constructor(cutawayCanvasId: string, trajectoryCanvasId: string) {
+    this.cutawayCanvas = document.getElementById(cutawayCanvasId) as HTMLCanvasElement;
+    this.cutawayCtx = this.cutawayCanvas.getContext('2d') as CanvasRenderingContext2D;
+    this.trajectoryCanvas = document.getElementById(trajectoryCanvasId) as HTMLCanvasElement;
+    this.trajectoryCtx = this.trajectoryCanvas.getContext('2d') as CanvasRenderingContext2D;
   }
 
   public setSootLevel(level: number) {
@@ -21,9 +25,14 @@ export class CutawayRenderer {
   }
 
   public clear() {
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    this.clearCutaway();
+    this.clearTrajectory();
+  }
+
+  private clearCutaway() {
+    const ctx = this.cutawayCtx;
+    const w = this.cutawayCanvas.width;
+    const h = this.cutawayCanvas.height;
 
     // Draw parchment paper background texture
     ctx.fillStyle = '#181512';
@@ -32,26 +41,30 @@ export class CutawayRenderer {
     // Subtle Leonardo parchment grid lines
     ctx.strokeStyle = '#2b241e';
     ctx.lineWidth = 1;
-    
-    // Horizontal rule
-    ctx.beginPath();
-    ctx.moveTo(50, h / 2);
-    ctx.lineTo(w - 50, h / 2);
-    ctx.stroke();
 
-    // Center divider
-    ctx.beginPath();
-    ctx.moveTo(550, 30);
-    ctx.lineTo(550, h - 30);
-    ctx.setLineDash([5, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw alchemical notebook labels
+    // Draw alchemical notebook label
     ctx.fillStyle = '#6e5e4f';
     ctx.font = 'italic 12px Lora, serif';
-    ctx.fillText('fig 1. Barrel Cutaway (Scale 1:1)', 70, 45);
-    ctx.fillText('fig 2. Range & Target Projection (35m)', 580, 45);
+    ctx.fillText('fig 1. Barrel Cutaway (Scale 1:1)', 15, h - 15);
+  }
+
+  private clearTrajectory() {
+    const ctx = this.trajectoryCtx;
+    const w = this.trajectoryCanvas.width;
+    const h = this.trajectoryCanvas.height;
+
+    // Draw parchment paper background texture
+    ctx.fillStyle = '#181512';
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle Leonardo parchment grid lines
+    ctx.strokeStyle = '#2b241e';
+    ctx.lineWidth = 1;
+
+    // Draw alchemical notebook label
+    ctx.fillStyle = '#6e5e4f';
+    ctx.font = 'italic 12px Lora, serif';
+    ctx.fillText('fig 2. Range & Target Projection (35m)', 15, h - 15);
   }
 
   public drawFrame(
@@ -60,13 +73,12 @@ export class CutawayRenderer {
     isPaused: boolean = false
   ) {
     this.clear();
-    const ctx = this.ctx;
     
-    const barrelLeft = 100;
-    const barrelLengthPx = 320;
+    const barrelLeft = 60;
+    const barrelLengthPx = 440;
     const barrelRight = barrelLeft + barrelLengthPx;
-    const centerY = 200;
-    const boreRadiusPx = 25; // radius of inside bore in pixels
+    const centerY = 270;
+    const boreRadiusPx = 40; // radius of inside bore in pixels
 
     const barrelMaterial = inputs.barrelMaterial;
     const projectileType = inputs.projectileType;
@@ -90,15 +102,16 @@ export class CutawayRenderer {
       }
     }
 
-    ctx.save();
-    if (dx !== 0 || dy !== 0) {
-      ctx.translate(dx, dy);
-    }
-
     // --- DRAW TARGET RANGE (Right Side) ---
     this.drawTargetRange(frame, projectileType);
 
-    // --- DRAW BARREL METALLURGY (Left Side) ---
+    // --- DRAW BARREL METALLURGY (Left Side on Cutaway Canvas with Shake) ---
+    this.cutawayCtx.save();
+    if (dx !== 0 || dy !== 0) {
+      this.cutawayCtx.translate(dx, dy);
+    }
+    
+    const ctx = this.cutawayCtx;
     ctx.save();
     
     // Draw barrel block based on material
@@ -118,8 +131,8 @@ export class CutawayRenderer {
     const isDeformed = frame.barrelStress >= limits.yield;
     const isRuptured = frame.barrelStress >= limits.ultimate;
 
-    const stressFactor = frame.barrelStress / limits.ultimate;
-    const redGlow = Math.min(1.0, stressFactor);
+    const maxHeatLoss = barrelMaterial === 'cast_bronze' ? 4000 : barrelMaterial === 'wrought_iron' ? 2500 : 800;
+    const redGlow = Math.min(1.0, frame.wallHeatLoss / maxHeatLoss);
 
     // Inside bore background
     ctx.fillStyle = '#0c0a09';
@@ -285,6 +298,19 @@ export class CutawayRenderer {
       ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, 20);
     }
 
+    // Draw bronze casting bubble void defect in normal wall (stress concentrator)
+    if (barrelMaterial === 'cast_bronze' && !isRuptured) {
+      ctx.save();
+      ctx.strokeStyle = '#3d3228';
+      ctx.fillStyle = '#0c0a09';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(barrelLeft + 150, centerY - boreRadiusPx - 10, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Breech plug (left end)
     ctx.fillStyle = wallColor;
     ctx.fillRect(barrelLeft - 15, centerY - boreRadiusPx - 20, 15, boreRadiusPx * 2 + 40);
@@ -334,26 +360,54 @@ export class CutawayRenderer {
       ctx.shadowBlur = 4;
       ctx.shadowColor = '#ff3c00';
       
-      const veinCount = 6;
-      for (let i = 0; i < veinCount; i++) {
-        let vx = barrelLeft + 60 + i * 50;
-        // Don't draw veins in the gaps if ruptured
-        if (isRuptured && barrelMaterial === 'wrought_iron' && vx >= barrelLeft + 140 && vx <= barrelLeft + 160) continue;
-        if (isRuptured && barrelMaterial === 'cast_bronze' && vx >= barrelLeft + 110 && vx <= barrelLeft + 190) continue;
-
-        // Top wall veins
+      if (barrelMaterial === 'cast_bronze') {
+        // Radial veins propagating from the void bubble defect at (barrelLeft + 150, centerY - boreRadiusPx - 10)
+        const voidX = barrelLeft + 150;
+        const voidY = centerY - boreRadiusPx - 10;
+        
         ctx.beginPath();
-        ctx.moveTo(vx, centerY - boreRadiusPx);
-        ctx.lineTo(vx + (i % 2 === 0 ? 5 : -5), centerY - boreRadiusPx - 10);
-        ctx.lineTo(vx + (i % 2 === 0 ? 2 : -8), centerY - boreRadiusPx - 18);
+        // Vein 1: down-left into chamber
+        ctx.moveTo(voidX, voidY);
+        ctx.lineTo(voidX - 15, voidY + 12);
+        ctx.lineTo(voidX - 30, voidY + 18);
+        
+        // Vein 2: down-right into chamber
+        ctx.moveTo(voidX, voidY);
+        ctx.lineTo(voidX + 18, voidY + 14);
+        ctx.lineTo(voidX + 35, voidY + 20);
+        
+        // Vein 3: left along wall
+        ctx.moveTo(voidX, voidY);
+        ctx.lineTo(voidX - 25, voidY - 2);
+        ctx.lineTo(voidX - 50, voidY - 4);
+        
+        // Vein 4: right along wall
+        ctx.moveTo(voidX, voidY);
+        ctx.lineTo(voidX + 25, voidY - 1);
+        ctx.lineTo(voidX + 55, voidY - 3);
         ctx.stroke();
+      } else {
+        // Standard distributed veins for iron and bamboo
+        const veinCount = 6;
+        for (let i = 0; i < veinCount; i++) {
+          let vx = barrelLeft + 60 + i * 50;
+          // Don't draw veins in the gaps if ruptured
+          if (isRuptured && barrelMaterial === 'wrought_iron' && vx >= barrelLeft + 140 && vx <= barrelLeft + 160) continue;
 
-        // Bottom wall veins
-        ctx.beginPath();
-        ctx.moveTo(vx + 10, centerY + boreRadiusPx);
-        ctx.lineTo(vx + 10 + (i % 2 === 0 ? -5 : 5), centerY + boreRadiusPx + 10);
-        ctx.lineTo(vx + 10 + (i % 2 === 0 ? -2 : 8), centerY + boreRadiusPx + 18);
-        ctx.stroke();
+          // Top wall veins
+          ctx.beginPath();
+          ctx.moveTo(vx, centerY - boreRadiusPx);
+          ctx.lineTo(vx + (i % 2 === 0 ? 5 : -5), centerY - boreRadiusPx - 10);
+          ctx.lineTo(vx + (i % 2 === 0 ? 2 : -8), centerY - boreRadiusPx - 18);
+          ctx.stroke();
+
+          // Bottom wall veins
+          ctx.beginPath();
+          ctx.moveTo(vx + 10, centerY + boreRadiusPx);
+          ctx.lineTo(vx + 10 + (i % 2 === 0 ? -5 : 5), centerY + boreRadiusPx + 10);
+          ctx.lineTo(vx + 10 + (i % 2 === 0 ? -2 : 8), centerY + boreRadiusPx + 18);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -392,23 +446,79 @@ export class CutawayRenderer {
         ctx.fill();
       }
 
-      // Draw touch-hole spark or fuse match
+      // Draw touch-hole matching slow-match descent & weather particles
       if (frame.stage === 'ignition') {
-        ctx.fillStyle = '#e6c387';
-        ctx.beginPath();
-        ctx.arc(barrelLeft + 44, centerY - boreRadiusPx - 20, 5, 0, Math.PI * 2);
-        ctx.fill();
+        const expectedDelay = 2.0 + (inputs.weatherHumidity / 100.0) * 8.0 + (100.0 - inputs.primingQuality) * 0.15 + (inputs.propellantProfile === 'damp_partial' ? 8.0 : 0.0) + (frame.foulingIndex || 0.0) * 6.0 + 0.75;
+        const progress = Math.min(1.0, frame.timeMs / expectedDelay);
+        
+        const touchholeX = barrelLeft + 44;
+        const touchholeY = centerY - boreRadiusPx - 20;
+        const matchTipX = touchholeX;
+        const matchTipY = touchholeY - 40 * (1.0 - progress);
 
-        // Little sparks
-        ctx.strokeStyle = '#d94e34';
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 6; i++) {
-          let angle = (i * Math.PI) / 3;
-          let rx = Math.cos(angle) * 12;
-          let ry = Math.sin(angle) * 12;
+        // Draw wooden holder stock
+        ctx.strokeStyle = '#5c4b3c';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(matchTipX + 35, matchTipY - 50);
+        ctx.lineTo(matchTipX + 10, matchTipY - 12);
+        ctx.stroke();
+
+        // Draw hemp match rope wrapped around it and tip
+        ctx.strokeStyle = '#bca085';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(matchTipX + 10, matchTipY - 12);
+        ctx.bezierCurveTo(matchTipX + 5, matchTipY - 8, matchTipX, matchTipY - 5, matchTipX, matchTipY);
+        ctx.stroke();
+
+        // Glowing match tip (ember)
+        ctx.fillStyle = '#ff4500';
+        ctx.shadowColor = '#ff8c00';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(matchTipX, matchTipY, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0; // reset shadow
+
+        // Spark shower if touching
+        if (progress > 0.9) {
+          ctx.strokeStyle = '#d94e34';
+          ctx.lineWidth = 1.5;
+          for (let i = 0; i < 6; i++) {
+            let angle = (i * Math.PI) / 3;
+            let rx = Math.cos(angle) * 12;
+            let ry = Math.sin(angle) * 12;
+            ctx.beginPath();
+            ctx.moveTo(touchholeX, touchholeY);
+            ctx.lineTo(touchholeX + rx, touchholeY + ry);
+            ctx.stroke();
+          }
+        }
+
+        // Windy: grains of priming powder blowing off
+        if (inputs.weatherWind > 0) {
+          const windSpeed = inputs.weatherWind / 100.0;
+          const grainOffset = (frame.timeMs * 3.0) % 30;
+          ctx.fillStyle = '#222';
           ctx.beginPath();
-          ctx.moveTo(barrelLeft + 44, centerY - boreRadiusPx - 20);
-          ctx.lineTo(barrelLeft + 44 + rx, centerY - boreRadiusPx - 20 + ry);
+          ctx.arc(touchholeX + 4 + grainOffset * windSpeed * 2.5, touchholeY + 2 - grainOffset * 0.5, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Rainy weather steam puffs on hot barrel
+      if (inputs.weatherRain > 0) {
+        const rainSpeed = inputs.weatherRain / 100.0;
+        const numPuffs = Math.floor(rainSpeed * 4) + 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < numPuffs; i++) {
+          const px = barrelLeft + ((frame.timeMs * 83 + i * 173) % barrelLengthPx);
+          const py = centerY - boreRadiusPx - 20;
+          const radius = (frame.timeMs * 1.5 + i * 4) % 7;
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
@@ -495,7 +605,7 @@ export class CutawayRenderer {
     }
 
     // --- PRE-EXIT GAS BLOW-BY JETS ---
-    if (frame.stage === 'movement' && waddingType === 'none' && frame.projectileX > 0.1 && frame.projectileX < 0.9) {
+    if (frame.stage === 'movement' && frame.leakage > 0.01 && frame.projectileX > 0.1 && frame.projectileX < 0.9) {
       ctx.save();
       const leakageFactor = Math.min(1.0, frame.leakage * 2.5);
       const jetLength = 30 + leakageFactor * 40;
@@ -531,7 +641,7 @@ export class CutawayRenderer {
       // 1. Touch-hole venting particles (drifts upwards)
       const touchholeX = barrelLeft + 44;
       const touchholeY = centerY - boreRadiusPx - 20;
-      const tSeed = Date.now() * 0.05;
+      const tSeed = frame.timeMs * 0.1;
       for (let i = 0; i < 3; i++) {
         const px = touchholeX + (Math.sin(tSeed + i * 1.7) * 4);
         const py = touchholeY - ((tSeed + i * 12) % 25);
@@ -562,13 +672,23 @@ export class CutawayRenderer {
       ctx.restore();
     }
 
-    // --- DRAW CHEMISTRY ZOOM LENS (First half of simulation - ignition and pressure build-up) ---
+    // --- DRAW CHEMISTRY & IGNITION ZOOM LENSES ---
     if (frame.stage === 'ignition' || frame.stage === 'pressure') {
       this.drawChemistryZoom(
         ctx,
         frame,
         propellantType,
         refinementLevel,
+        barrelLeft,
+        centerY,
+        boreRadiusPx
+      );
+    }
+    if (frame.stage === 'setup' || frame.stage === 'ignition') {
+      this.drawIgnitionZoom(
+        ctx,
+        frame,
+        inputs,
         barrelLeft,
         centerY,
         boreRadiusPx
@@ -587,7 +707,8 @@ export class CutawayRenderer {
         barrelLengthPx
       );
     }
-    ctx.restore(); // camera shake restore
+    
+    this.cutawayCtx.restore(); // camera shake restore
   }
 
   private drawChemistryZoom(
@@ -601,11 +722,11 @@ export class CutawayRenderer {
   ) {
     ctx.save();
     
-    // Zoom lens coordinates
-    const zoomX = 310;
-    const zoomY = 90;
-    const zoomR = 35;
-    const targetX = barrelLeft + 50; // chamber center
+    // Zoom lens coordinates (scaled up)
+    const zoomX = 365;
+    const zoomY = 100;
+    const zoomR = 55;
+    const targetX = barrelLeft + 60; // chamber center
     const targetY = centerY;
 
     // 1. Draw leader lines (optical zoom cone)
@@ -663,8 +784,8 @@ export class CutawayRenderer {
 
       const jitterAmp = tempIntensity * 1.5;
       grainPositions.forEach(p => {
-        const jitterX = Math.sin(Date.now() * 0.05 + p.dx) * jitterAmp;
-        const jitterY = Math.cos(Date.now() * 0.05 + p.dy) * jitterAmp;
+        const jitterX = Math.sin(frame.timeMs * 0.1 + p.dx) * jitterAmp;
+        const jitterY = Math.cos(frame.timeMs * 0.1 + p.dy) * jitterAmp;
 
         ctx.beginPath();
         ctx.arc(zoomX + p.dx + jitterX, zoomY + p.dy + jitterY, grainRadius, 0, Math.PI * 2);
@@ -675,7 +796,7 @@ export class CutawayRenderer {
         if (burnProgress > 0.05 && burnProgress < 0.95) {
           ctx.fillStyle = 'rgba(255, 159, 28, 0.7)';
           ctx.beginPath();
-          ctx.arc(zoomX + p.dx + Math.sin(Date.now() * 0.01 + p.dx) * 8, zoomY + p.dy + Math.cos(Date.now() * 0.01 + p.dy) * 8, 1.5, 0, Math.PI * 2);
+          ctx.arc(zoomX + p.dx + Math.sin(frame.timeMs * 0.02 + p.dx) * 8, zoomY + p.dy + Math.cos(frame.timeMs * 0.02 + p.dy) * 8, 1.5, 0, Math.PI * 2);
           ctx.fill();
         }
       });
@@ -694,7 +815,7 @@ export class CutawayRenderer {
         ctx.strokeStyle = '#ff9f1c';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        const fireJitter = Math.sin(Date.now() * 0.1) * (1.0 + tempIntensity * 2.0);
+        const fireJitter = Math.sin(frame.timeMs * 0.2) * (1.0 + tempIntensity * 2.0);
         ctx.moveTo(zoomX - zoomR + 5, zoomY + zoomR - pileHeight - 2 + fireJitter);
         ctx.quadraticCurveTo(zoomX, zoomY + zoomR - pileHeight * 2 - 2 - fireJitter, zoomX + zoomR - 5, zoomY + zoomR - pileHeight - 2 + fireJitter);
         ctx.stroke();
@@ -704,24 +825,167 @@ export class CutawayRenderer {
 
     // 4. Draw Chemistry Callout text (Right of Zoom Circle)
     ctx.fillStyle = '#bca085';
-    ctx.font = 'italic 11px Lora, serif';
-    ctx.fillText('fig 1b. Alchemical Calcination', zoomX + zoomR + 15, zoomY - 18);
+    ctx.font = 'italic 13px Lora, serif';
+    ctx.fillText('fig 1b. Alchemical Calcination', zoomX + zoomR + 15, zoomY - 24);
     
     ctx.fillStyle = '#ff9f1c';
-    ctx.font = 'normal 10px Share Tech Mono, monospace';
-    ctx.fillText(`Tempest: ${frame.temperature.toFixed(0)} K`, zoomX + zoomR + 15, zoomY - 6);
+    ctx.font = 'normal 11px Share Tech Mono, monospace';
+    ctx.fillText(`Tempest: ${frame.temperature.toFixed(0)} K`, zoomX + zoomR + 15, zoomY - 8);
 
     ctx.fillStyle = '#8c7662';
-    ctx.font = 'normal 11px Share Tech Mono, monospace';
-    ctx.fillText('2KNO₃ + 3C + S ➜ K₂S + N₂ + 3CO₂', zoomX + zoomR + 15, zoomY + 6);
+    ctx.font = 'normal 12px Share Tech Mono, monospace';
+    ctx.fillText('2KNO₃ + 3C + S ➜ K₂S + N₂ + 3CO₂', zoomX + zoomR + 15, zoomY + 8);
 
     // Stats
     const gasYield = refinementLevel * 0.45;
     const ashResidue = 100.0 - gasYield;
-    ctx.font = 'normal 10px Share Tech Mono, monospace';
+    ctx.font = 'normal 11px Share Tech Mono, monospace';
     ctx.fillStyle = '#6e5e4f';
-    ctx.fillText(`Unburned Grains: ${unburnedPercent.toFixed(0)}%`, zoomX + zoomR + 15, zoomY + 18);
-    ctx.fillText(`Gas Yield: ${gasYield.toFixed(0)}% / Ash: ${ashResidue.toFixed(0)}%`, zoomX + zoomR + 15, zoomY + 28);
+    ctx.fillText(`Unburned Grains: ${unburnedPercent.toFixed(0)}%`, zoomX + zoomR + 15, zoomY + 24);
+    ctx.fillText(`Gas Yield: ${gasYield.toFixed(0)}% / Ash: ${ashResidue.toFixed(0)}%`, zoomX + zoomR + 15, zoomY + 38);
+
+    ctx.restore();
+  }
+
+  private drawIgnitionZoom(
+    ctx: CanvasRenderingContext2D,
+    frame: ShotFrame,
+    inputs: ShotInput,
+    barrelLeft: number,
+    centerY: number,
+    boreRadiusPx: number
+  ) {
+    ctx.save();
+    
+    // Zoom lens coordinates (scaled up and shifted for spacing)
+    const zoomX = 175;
+    const zoomY = 100;
+    const zoomR = 55;
+    
+    const touchholeX = barrelLeft + 44;
+    const touchholeY = centerY - boreRadiusPx - 20;
+
+    // 1. Draw leader lines (optical zoom cone)
+    ctx.strokeStyle = 'rgba(140, 118, 98, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(touchholeX - 6, touchholeY);
+    ctx.lineTo(zoomX - zoomR, zoomY);
+    ctx.moveTo(touchholeX + 6, touchholeY);
+    ctx.lineTo(zoomX + zoomR, zoomY);
+    ctx.stroke();
+
+    // 2. Draw Zoom circle frame
+    ctx.strokeStyle = '#8c7662';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#0c0a09';
+    ctx.beginPath();
+    ctx.arc(zoomX, zoomY, zoomR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Clip to zoom circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(zoomX, zoomY, zoomR, 0, Math.PI * 2);
+    ctx.clip();
+
+    // 3. Draw touchhole channel structure inside zoom
+    ctx.strokeStyle = '#3d3228';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(zoomX - 12, zoomY - zoomR);
+    ctx.lineTo(zoomX - 12, zoomY + zoomR);
+    ctx.moveTo(zoomX + 12, zoomY - zoomR);
+    ctx.lineTo(zoomX + 12, zoomY + zoomR);
+    ctx.stroke();
+
+    // 4. Draw priming grains at the bottom
+    const grainOffsets = [
+      { dx: -8, dy: 22 }, { dx: -2, dy: 28 }, { dx: 6, dy: 25 },
+      { dx: -6, dy: 16 }, { dx: 0, dy: 20 }, { dx: 8, dy: 15 },
+      { dx: -3, dy: 10 }, { dx: 4, dy: 8 }
+    ];
+
+    const expectedDelay = 2.0 + (inputs.weatherHumidity / 100.0) * 8.0 + (100.0 - inputs.primingQuality) * 0.15 + (inputs.propellantProfile === 'damp_partial' ? 8.0 : 0.0) + (frame.foulingIndex || 0.0) * 6.0 + 0.75;
+    const progress = frame.stage === 'ignition' ? Math.min(1.0, frame.timeMs / expectedDelay) : 0.0;
+    
+    // Draw descending slow-match tip inside zoom
+    const matchY = zoomY - zoomR + progress * 60;
+    
+    // Draw matches inside zoom
+    if (frame.stage === 'ignition') {
+      ctx.strokeStyle = '#bca085';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(zoomX, zoomY - zoomR);
+      ctx.lineTo(zoomX, matchY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ff4500';
+      ctx.beginPath();
+      ctx.arc(zoomX, matchY, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    grainOffsets.forEach((g) => {
+      const gx = zoomX + g.dx;
+      const gy = zoomY + g.dy;
+      
+      // Grains ignite from top down based on progress
+      const grainProgress = (gy - (zoomY - zoomR)) / (zoomR * 2);
+      const isIgnited = progress > grainProgress * 0.8;
+      const isMisfire = frame.warnings.some(w => w.includes("failed") || w.includes("Misfire"));
+
+      if (isIgnited && !isMisfire) {
+        // Glowing hot orange grain
+        ctx.fillStyle = '#ff8c00';
+        ctx.strokeStyle = '#ff3c00';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Unignited grey/black grain
+        ctx.fillStyle = '#2d2d2d';
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    });
+
+    // Fire column if fully ignited
+    if (progress > 0.6 && !frame.warnings.some(w => w.includes("failed"))) {
+      let fireGrad = ctx.createLinearGradient(zoomX, zoomY - zoomR, zoomX, zoomY + zoomR);
+      fireGrad.addColorStop(0, '#ff9f1c');
+      fireGrad.addColorStop(0.5, '#d94e34');
+      fireGrad.addColorStop(1, '#ff3c00');
+      ctx.fillStyle = fireGrad;
+      ctx.fillRect(zoomX - 10, zoomY - zoomR, 20, zoomR * 2);
+    }
+
+    ctx.restore(); // restore clip
+
+    // 5. Draw callout labels to the left of the zoom lens (ensuring positive bounds)
+    ctx.fillStyle = '#bca085';
+    ctx.font = 'italic 13px Lora, serif';
+    ctx.fillText('fig 1a. Touch-hole Priming', 15, zoomY - 24);
+    
+    ctx.fillStyle = '#8c7662';
+    ctx.font = 'normal 11px Share Tech Mono, monospace';
+    ctx.fillText(`Priming: ${inputs.primingQuality.toFixed(0)}%`, 15, zoomY - 8);
+    
+    let weatherPenalty = 0;
+    if (inputs.weatherHumidity > 50) weatherPenalty += 2;
+    if (inputs.weatherWind > 50) weatherPenalty += 1.5;
+    if (inputs.weatherRain > 10) weatherPenalty += 3.5;
+    
+    ctx.fillText(`Dwell Penalty: +${weatherPenalty.toFixed(1)}ms`, 15, zoomY + 8);
+    ctx.fillText(frame.stage === 'ignition' ? 'STATUS: SPARKING' : 'STATUS: READY', 15, zoomY + 24);
 
     ctx.restore();
   }
@@ -734,11 +998,11 @@ export class CutawayRenderer {
     boreRadiusPx: number,
     barrelLengthPx: number
   ) {
-    const ctx = this.ctx;
+    const ctx = this.cutawayCtx;
     ctx.save();
     ctx.strokeStyle = '#8c7662';
     ctx.fillStyle = '#bca085';
-    ctx.font = 'italic 11px Lora, serif';
+    ctx.font = 'italic 13px Lora, serif';
     ctx.lineWidth = 1;
 
     // Helper to draw leader line with a tiny ring
@@ -763,7 +1027,7 @@ export class CutawayRenderer {
     const pressIx = barrelLeft + 30;
     const pressIy = centerY - 55;
     drawLeader(pressTx, pressTy, pressIx, pressIy, -45);
-    ctx.fillText(`Chamber Press: ${frame.pressure.toFixed(1)} MPa`, pressIx - 135, pressIy - 4);
+    ctx.fillText(`fig 1c. Pressure (P): ${frame.pressure.toFixed(1)} MPa`, Math.max(10, pressIx - 135), pressIy - 4);
 
     // 2. Windage Gap & Rattle Deflection (only if projectile is inside the barrel)
     if (frame.stage !== 'flight' && frame.stage !== 'impact' && frame.stage !== 'aftermath') {
@@ -775,13 +1039,27 @@ export class CutawayRenderer {
       else if (projectileType === 'lead_arrow') gapSize = '1.5';
       else if (projectileType === 'pebbles') gapSize = '3.5 (scattered)';
       
-      // Draw Windage Callout
+      // Draw Windage Callout (dynamic direction to prevent overlapping zoom lens)
+      let gapDirection = -1; // left
+      if (projX < 150) {
+        gapDirection = 1; // right
+      }
+
       const gapTx = projX + 15;
       const gapTy = centerY - boreRadiusPx + 3;
-      const gapIx = projX - 15;
+      const gapIx = projX + (gapDirection === -1 ? -15 : 15);
       const gapIy = centerY - boreRadiusPx - 40;
-      drawLeader(gapTx, gapTy, gapIx, gapIy, -50);
-      ctx.fillText(`Windage Gap: ${gapSize}mm`, gapIx - 110, gapIy - 4);
+      drawLeader(gapTx, gapTy, gapIx, gapIy, gapDirection * 50);
+      
+      ctx.save();
+      if (gapDirection === -1) {
+        ctx.textAlign = 'right';
+        ctx.fillText(`fig 1d. Windage Gap: ${gapSize}mm`, gapIx - 50, gapIy - 4);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.fillText(`fig 1d. Windage Gap: ${gapSize}mm`, gapIx + 50, gapIy - 4);
+      }
+      ctx.restore();
 
       // Draw Rattle / Aim Deflection Callout if it's moving or setup
       if (frame.stage === 'movement' || frame.stage === 'setup' || frame.stage === 'ignition') {
@@ -790,8 +1068,40 @@ export class CutawayRenderer {
         const rattleIx = projX + 45;
         const rattleIy = centerY + boreRadiusPx + 40;
         drawLeader(rattleTx, rattleTy, rattleIx, rattleIy, 50);
-        ctx.fillText(`Aim Deflect: ${frame.aimOffset.toFixed(1)}°`, rattleIx + 5, rattleIy - 4);
+        ctx.fillText(`fig 1e. Aim Jitter: ${frame.aimOffset.toFixed(1)}°`, rattleIx + 5, rattleIy - 4);
       }
+    }
+
+    // 3. Convective Wall Loss Callout (pointing to bottom wall)
+    const lossTx = barrelLeft + 220;
+    const lossTy = centerY + boreRadiusPx + 10;
+    const lossIx = barrelLeft + 250;
+    const lossIy = centerY + boreRadiusPx + 45;
+    drawLeader(lossTx, lossTy, lossIx, lossIy, 55);
+    ctx.fillText(`fig 1f. Convective Wall Loss: ${frame.wallHeatLoss.toFixed(0)} J`, lossIx + 5, lossIy - 4);
+
+    // 4. Carbonaceous Crust Callout (pointing to bottom soot layer)
+    const sootTx = barrelLeft + 180;
+    const sootTy = centerY + boreRadiusPx - 2;
+    const sootIx = barrelLeft + 150;
+    const sootIy = centerY + boreRadiusPx + 65;
+    drawLeader(sootTx, sootTy, sootIx, sootIy, -50);
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.fillText(`fig 1g. Carbon Crust: ${(frame.foulingIndex * 100).toFixed(0)}% Fouled`, sootIx - 5, sootIy - 4);
+    ctx.restore();
+
+    // 5. Fuel Consumption Callout (pointing to powder charge)
+    if (frame.stage === 'ignition' || frame.stage === 'pressure' || frame.stage === 'movement' || frame.stage === 'setup') {
+      const fuelTx = barrelLeft + 25;
+      const fuelTy = centerY + 10;
+      const fuelIx = barrelLeft - 10;
+      const fuelIy = centerY + 55;
+      drawLeader(fuelTx, fuelTy, fuelIx, fuelIy, -50);
+      ctx.save();
+      ctx.textAlign = 'right';
+      ctx.fillText(`fig 1h. Unspent Fuel: ${(frame.unburnedMass * 1000).toFixed(2)}g`, Math.max(10, fuelIx - 50), fuelIy - 4);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -890,11 +1200,11 @@ export class CutawayRenderer {
   }
 
   private drawTargetRange(frame: ShotFrame, _projectileType: string) {
-    const ctx = this.ctx;
-    const rangeLeft = 580;
-    const rangeWidth = 500;
-    const groundY = 320;
-    const shooterHeightY = 220;
+    const ctx = this.trajectoryCtx;
+    const rangeLeft = 40;
+    const rangeWidth = 520;
+    const groundY = 250;
+    const shooterHeightY = 202; // aligned with 1.2m launch height
 
     // Draw ground
     ctx.strokeStyle = '#2d241c';

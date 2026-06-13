@@ -73,7 +73,7 @@ class LaboratoryApp {
     }
 
     // 2. Instantiate Components
-    this.renderer = new CutawayRenderer('sim-canvas');
+    this.renderer = new CutawayRenderer('sim-cutaway-canvas', 'sim-trajectory-canvas');
     this.renderer.clear();
 
     this.controls = new ControlsPanel((inputs) => {

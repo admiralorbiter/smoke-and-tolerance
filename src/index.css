@@ -1,11 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Share+Tech+Mono&display=swap');
 
 :root {
-  --bg-dark: #12100e;
+  --bg-dark: #0d0b0a;
   --bg-parchment: #1a1714;
   --border-ink: #3a322a;
   --text-ink: #ebd5b3;
   --text-dim: #a8947b;
+  --text-light: #fdfbf7;
   --accent-gold: #cfa86b;
   --accent-gold-glow: rgba(207, 168, 107, 0.2);
   --accent-red: #9e2a2b;
@@ -103,7 +104,7 @@ main {
   pointer-events: none;
 }
 
-#canvas-label {
+#cutaway-canvas-label, #trajectory-canvas-label {
   font-family: var(--font-display);
   font-size: 0.9rem;
   color: var(--accent-gold);
@@ -112,6 +113,19 @@ main {
   letter-spacing: 0.1rem;
   border-bottom: 1px solid var(--border-ink);
   padding-bottom: 0.25rem;
+}
+
+.canvas-grid-container {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .canvas-grid-container {
+    grid-template-columns: 1fr;
+  }
 }
 
 canvas {

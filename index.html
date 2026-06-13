@@ -15,9 +15,15 @@
   <main>
     <!-- Left Column: Simulation & Playback -->
     <section class="sim-container">
-      <div class="canvas-card">
-        <h2 id="canvas-label">Test Device Cutaway View</h2>
-        <canvas id="sim-canvas" width="1200" height="400"></canvas>
+      <div class="canvas-grid-container">
+        <div class="canvas-card cutaway-card">
+          <h2 id="cutaway-canvas-label">fig 1. Test Device Cutaway</h2>
+          <canvas id="sim-cutaway-canvas" width="800" height="320"></canvas>
+        </div>
+        <div class="canvas-card trajectory-card">
+          <h2 id="trajectory-canvas-label">fig 2. Flight & Target Trajectory</h2>
+          <canvas id="sim-trajectory-canvas" width="600" height="320"></canvas>
+        </div>
       </div>
 
       <div class="timeline-card">
@@ -238,7 +244,6 @@
           </div>
         </div>
       </div>
-    </section>
     </section>
 
     <!-- Right Column: Lab Controls & Diagnosis -->
