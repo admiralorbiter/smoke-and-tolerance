@@ -847,7 +847,37 @@ Stone shot was rarely perfectly spherical, causing severe windage (gas blowing p
 
 ---
 
-## 19. Design Red Lines
+## 19. Future Feature Concepts (Post-Prototype)
+
+These four premium features have been identified as high-value extensions for future development cycles:
+
+### 19.1 Web Audio API Dynamic Sound Synthesizer
+Early gunpowder devices were notorious not just for their power, but for their terrifying acoustic presence. Instead of playing static audio files, this system dynamically synthesizes blast sounds in the browser based on simulation telemetry:
+*   **The Blast Boom:** Audio wave shape, volume, and low-frequency resonance scale with peak chamber pressure ($P$) and gas mass ($m_{gas}$).
+*   **The Material Resonance Ring:** Bronze barrels ring like cast bells (sine waves at metal resonant frequencies with slow decay); iron barrels produce clashing metallic thuds; bamboo produces sharp, wood-splintering cracks.
+*   **The Leakage Hiss:** Escape of gas past the projectile (windage clearance) and out the touch-hole creates a high-frequency white-noise hiss proportional to the venting leakage rate.
+*   **The Structural Failure Snap:** Yield failures and explosive ruptures trigger a sudden transient spike followed by ripping acoustic noise.
+
+### 19.2 Interactive Metallurgical X-Ray & Degradation View
+Introduces physical barrel fatigue and micro-fractures to simulate the short operational lifespan of early cast and forged barrels:
+*   **Fatigue Accumulation:** Every shot inflicts structural damage based on how close the peak hoop stress got to the material's yield strength.
+*   **Degradation Overlay:** A structural cross-section overlay in the UI dynamically renders internal cracks forming inside the metal or bamboo walls.
+*   **Gameplay Loop:** Players must decide whether to continue firing a stressed, micro-fractured barrel or clean/retire/re-forge it.
+
+### 19.3 Target Impact Physics & Historical Armor Testing
+Expands the target range visualizer into a full ballistic testing environment evaluating the mechanical efficiency of early projectile systems:
+*   **Historical Target Materials:** Unlocks armor testing targets such as *Silk Lamellar*, *Woven Bamboo Shields*, *Oak Wood Planks*, or *Wrought Iron Plates*.
+*   **Penetration Mechanics:** Computes projectile kinetic energy ($E_k = \frac{1}{2}mv^2$), sectional density, and impact energy transfer to calculate damage, fracture, and penetration depth.
+*   **Deformation Animation:** Renders projectiles flattening (lead balls), shattering (stone pebbles), or penetrating and splintering the selected targets.
+
+### 19.4 Alchemical Notebook & Manuscript Log (Progression)
+Unifies player progression under an in-game alchemical manuscript log, rewarding exploration of safety limits and historical discoveries:
+*   **Discovery Triggers:** Achievements unlock based on extreme simulation states (e.g., *Misfire under wet powder*, *Rupture of a bamboo tube*, *Muzzle velocity exceeding 150m/s*).
+*   **Visual Manuscript Pages:** Features hand-drawn alchemical illustrations, woodcut aesthetic designs, and qualitative historical commentary from period treatises (e.g., *Wujing zongyao*).
+
+---
+
+## 20. Design Red Lines
 
 To keep the project educational and safe, do not include:
 
@@ -872,6 +902,7 @@ Use instead:
 
 ---
 
-## 20. One-Sentence Pitch
+## 21. One-Sentence Pitch
 
 **Smoke & Tolerance** is a historical systems game where players discover that early firearms were not simple inventions, but fragile negotiations between chemistry, weather, craft, metallurgy, human timing, and chance.
+
