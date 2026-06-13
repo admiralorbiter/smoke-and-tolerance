@@ -14,6 +14,7 @@ Rather than treating early firearms as finished weapons, this game explores them
 *   **Windage Clearance:** Observe how gas escapes around rough, hand-carved stone projectiles.
 *   **Environmental Sensitivity:** Experience how wind, rain, and humidity delay ignition and foul the barrel.
 *   **Alchemical Chemistry Ledger (Tabula Alchimica):** Monitor real-time reaction thermodynamics, Tria Prima proportions, and strict conservation of mass.
+*   **Dynamic Audio Synthesis:** Hear telemetry-driven soundscapes in real-time, mapping weather wind, touch-hole sizzles, pressure leakage, and barrel stresses directly to custom Web Audio synthesis nodes.
 
 ---
 
