@@ -11,6 +11,7 @@ class LaboratoryApp {
 
   private currentInputs: ShotInput | null = null;
   private isInitialLoad: boolean = true;
+  private hasFiredShot: boolean = false;
 
   private lastRenderedFrameIndex: number = 0;
   private lastRenderedFrames: any[] = [];
@@ -133,6 +134,7 @@ class LaboratoryApp {
   }
 
   private handleFireShot(inputs: ShotInput) {
+    this.hasFiredShot = true;
     this.currentInputs = inputs;
     this.controls.setFiringState(true);
     inputs.primingQuality = 100.0;
@@ -322,10 +324,33 @@ class LaboratoryApp {
       isMass: boolean;
     }
 
+    const maxPressure = Math.max(...frames.map(f => f.pressure));
+    const maxTemp = Math.max(...frames.map(f => f.temperature));
+
     const plots: ChartPlot[] = [
-      { title: 'PRESSURE (MPa)', color: '#d94e34', valKey: 'pressure', maxVal: 30.0, unit: 'MPa', isMass: false },
-      { title: 'TEMPERATURE (K)', color: '#ffb703', valKey: 'temperature', maxVal: 2500.0, unit: 'K', isMass: false },
-      { title: 'MASS BUDGET (g)', color: '#e6c387', maxVal: 15.0, unit: 'g', isMass: true }
+      {
+        title: 'PRESSURE (MPa)',
+        color: '#d94e34',
+        valKey: 'pressure',
+        maxVal: Math.max(30.0, Math.ceil((maxPressure * 1.1) / 5) * 5),
+        unit: 'MPa',
+        isMass: false
+      },
+      {
+        title: 'TEMPERATURE (K)',
+        color: '#ffb703',
+        valKey: 'temperature',
+        maxVal: Math.max(2500.0, Math.ceil((maxTemp * 1.05) / 100) * 100),
+        unit: 'K',
+        isMass: false
+      },
+      {
+        title: 'MASS BUDGET (g)',
+        color: '#e6c387',
+        maxVal: 15.0,
+        unit: 'g',
+        isMass: true
+      }
     ];
 
     plots.forEach((plot, pIdx) => {
@@ -356,6 +381,11 @@ class LaboratoryApp {
       ctx.font = 'normal 8px Share Tech Mono, monospace';
       ctx.fillText(plot.maxVal.toFixed(0) + plot.unit, plotX - 35, plotY + 6);
       ctx.fillText('0' + plot.unit, plotX - 22, plotY + plotH);
+
+      // If no shot has been fired, skip drawing telemetry lines and scrub bars
+      if (!this.hasFiredShot) {
+        return;
+      }
 
       // Render chart data line
       ctx.lineWidth = 1.5;
@@ -416,6 +446,24 @@ class LaboratoryApp {
         ctx.fillText(valText, scrubX + 4, plotY + plotH - 5);
       }
     });
+
+    if (!this.hasFiredShot) {
+      // Render centered overlay with awaiting alchemical message
+      ctx.fillStyle = 'rgba(12, 10, 9, 0.8)';
+      const fullGridWidth = plots.length * plotW + (plots.length - 1) * spacing;
+      ctx.fillRect(paddingLeft, plotY, fullGridWidth, plotH);
+
+      ctx.fillStyle = '#bca085';
+      ctx.font = 'normal 11px Cinzel, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🜔 AWAITING TEST FIRE... 🜔', paddingLeft + fullGridWidth / 2, plotY + plotH / 2 - 8);
+      
+      ctx.fillStyle = '#8f7762';
+      ctx.font = 'normal 8px Share Tech Mono, monospace';
+      ctx.fillText('LAUNCH THE DEVICE TO CAPTURE AND PLOT ACTIVE COMBUSTION TELEMETRY', paddingLeft + fullGridWidth / 2, plotY + plotH / 2 + 12);
+      ctx.textAlign = 'left'; // restore default
+      return;
+    }
 
     // Subplot total duration label
     const totalTimeMs = frames[frames.length - 1].timeMs;

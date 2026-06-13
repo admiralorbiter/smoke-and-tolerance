@@ -361,6 +361,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         // Complete the failure visualization
         let last_frame = frames.last().unwrap().clone();
         for step in 1..10 {
+            let decay = (-1.0 * step as f64).exp();
             frames.push(ShotFrame {
                 t: 0.0,
                 time_ms: last_frame.time_ms + step as f64 * 0.5,
@@ -376,8 +377,8 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 aim_offset: 0.0,
                 warnings: vec!["TEST DEVICE RUPTURED".to_string()],
                 unburned_mass,
-                gas_mass: 0.0,
-                temperature: 293.15,
+                gas_mass: gas_mass * decay,
+                temperature: 293.15 + (current_temp - 293.15) * decay,
                 grain_r,
             });
         }
@@ -389,6 +390,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         outcomes.push("stuck_projectile".to_string());
         let last_frame = frames.last().unwrap().clone();
         for step in 1..10 {
+            let decay = (-0.5 * step as f64).exp();
             frames.push(ShotFrame {
                 t: 0.0,
                 time_ms: last_frame.time_ms + step as f64 * 0.5,
@@ -404,8 +406,8 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 aim_offset: 0.0,
                 warnings: vec!["Projectile stuck in bore".to_string()],
                 unburned_mass,
-                gas_mass,
-                temperature: 293.15,
+                gas_mass: gas_mass * decay,
+                temperature: 293.15 + (current_temp - 293.15) * decay,
                 grain_r,
             });
         }
@@ -459,6 +461,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let total_flight_frames = flight_frames.len();
     for (i, (fx, fy, fspeed)) in flight_frames.into_iter().enumerate() {
         let normalized_step = i as f64 / total_flight_frames.max(1) as f64;
+        let decay = (-0.3 * i as f64).exp();
         frames.push(ShotFrame {
             t: 0.0, // fill later
             time_ms: time_ms + i as f64 * (flight_dt * 1000.0),
@@ -479,10 +482,10 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             } else {
                 vec![]
             },
-            unburned_mass: 0.0,
-            gas_mass: 0.0,
-            temperature: 293.15,
-            grain_r: 0.0,
+            unburned_mass,
+            gas_mass: gas_mass * decay,
+            temperature: 293.15 + (current_temp - 293.15) * decay,
+            grain_r,
         });
     }
 

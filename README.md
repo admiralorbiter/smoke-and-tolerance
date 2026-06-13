@@ -13,6 +13,7 @@ Rather than treating early firearms as finished weapons, this game explores them
 *   **Variable Chemistry:** Contrast raw, slow-burning meal powder against granulated corned powder.
 *   **Windage Clearance:** Observe how gas escapes around rough, hand-carved stone projectiles.
 *   **Environmental Sensitivity:** Experience how wind, rain, and humidity delay ignition and foul the barrel.
+*   **Alchemical Chemistry Ledger (Tabula Alchimica):** Monitor real-time reaction thermodynamics, Tria Prima proportions, and strict conservation of mass.
 
 ---
 
@@ -22,7 +23,8 @@ Rather than treating early firearms as finished weapons, this game explores them
 2.  **Fire a Test Shot:** Run the physics-integrated Rust simulator.
 3.  **Inspect the Cutaway:** Watch the 2D cutaway animation showing pressure glows, stress coloration, and gas leakage streams.
 4.  **Scrub the Timeline:** Step frame-by-frame through ignition, pressure buildup, projectile movement, muzzle flash, and flight ballistics.
-5.  **Read the Diagnosis:** Learn from post-shot analysis cards describing the historical causes of misfires, jams, and ruptures.
+5.  **Examine the Alchemical Ledger:** Toggle between **Instruments** (a Tria Prima ternary marker, Roman caloric pyrometer, and distillation alembic), **Ledger** (a conservation-of-mass balance table), and **Telemetry Charts** (interactive pressure, temperature, and mass plots synced with the timeline scrub).
+6.  **Read the Diagnosis:** Learn from post-shot analysis cards describing the historical causes of misfires, jams, and ruptures.
 
 ---
 
