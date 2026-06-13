@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smoke & Tolerance: Historical Gunpowder Laboratory</title>
+  <link rel="stylesheet" href="/src/index.css">
+</head>
+<body>
+  <header>
+    <h1>Smoke & Tolerance</h1>
+    <p>A historical simulation-lab of early firearms and material tolerances</p>
+  </header>
+
+  <main>
+    <!-- Left Column: Simulation & Playback -->
+    <section class="sim-container">
+      <div class="canvas-card">
+        <h2 id="canvas-label">Test Device Cutaway View</h2>
+        <canvas id="sim-canvas" width="1200" height="400"></canvas>
+      </div>
+
+      <div class="timeline-card">
+        <div class="timeline-controls">
+          <button id="btn-play" class="btn-icon" title="Toggle Playback">
+            <span id="play-icon">▶</span> <span id="play-text">PLAY</span>
+          </button>
+          <div class="timeline-slider-container">
+            <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1">
+          </div>
+          <button id="btn-clear-soot" class="btn-icon" title="Clean soot and residue out of the barrel">
+            🧹 CLEAN BORE
+          </button>
+        </div>
+
+        <div class="timeline-stats">
+          <div class="stat-box">
+            <span>Stage</span>
+            <span id="stat-stage">-</span>
+          </div>
+          <div class="stat-box">
+            <span>Chamber Pressure</span>
+            <span id="stat-pressure">0.0 MPa</span>
+          </div>
+          <div class="stat-box">
+            <span>Barrel Hoop Stress</span>
+            <span id="stat-stress">0.0 MPa</span>
+          </div>
+          <div class="stat-box">
+            <span>Muzzle Velocity</span>
+            <span id="stat-velocity">0.0 m/s</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Lab Controls & Diagnosis -->
+    <aside class="sidebar">
+      <div class="panel-card">
+        <h2 class="panel-title">Lab Settings</h2>
+        
+        <div class="control-group">
+          <label for="select-barrel">Barrel Metallurgy</label>
+          <select id="select-barrel">
+            <option value="bamboo">Bamboo Tube (Flexible but Weak)</option>
+            <option value="wrought_iron" selected>Wrought Iron Staves (Hand-welded longitudinal seams)</option>
+            <option value="cast_bronze">Cast Bronze (Heavy, susceptible to casting bubbles)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="select-propellant">Propellant Grain Processing</label>
+          <select id="select-propellant">
+            <option value="meal">Meal / Serpentine (Slow, separates in transport)</option>
+            <option value="corned" selected>Corned / Granulated (Fast burning, explosive)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Saltpeter Refinement (Purity)</label>
+          <div class="slider-input-container">
+            <input type="range" id="slider-refinement" min="0" max="100" value="65">
+            <span class="slider-value" id="val-refinement">65%</span>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label for="select-projectile">Projectile Type</label>
+          <select id="select-projectile">
+            <option value="lead_ball" selected>Lead Ball (Spherical, self-lubricating)</option>
+            <option value="rough_stone">Rough Stone Sphere (Irregular, high windage rattle)</option>
+            <option value="lead_arrow">Lead Arrow-Bolt (Aero, wrapped gas seal)</option>
+            <option value="pebbles">Pebble / Gravel Spray (High scatter, fast velocity drop)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="select-sealing">Bore Packing (Wadding / Seal)</label>
+          <select id="select-sealing">
+            <option value="none">None (High gas escape clearance)</option>
+            <option value="tow" selected>Tow Packing (Coarse flax fibers)</option>
+            <option value="clay">Clay Plug (Airtight seal, high friction)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Humidity / Ambient Moisture</label>
+          <div class="slider-input-container">
+            <input type="range" id="slider-humidity" min="0" max="100" value="30">
+            <span class="slider-value" id="val-humidity">30%</span>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Wind Velocity</label>
+          <div class="slider-input-container">
+            <input type="range" id="slider-wind" min="0" max="100" value="15">
+            <span class="slider-value" id="val-wind">15%</span>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Rain Severity</label>
+          <div class="slider-input-container">
+            <input type="range" id="slider-rain" min="0" max="100" value="0">
+            <span class="slider-value" id="val-rain">0%</span>
+          </div>
+        </div>
+
+        <button id="btn-fire" class="fire-btn">🔥 FIRE TEST SHOT</button>
+      </div>
+
+      <div class="panel-card">
+        <h2 class="panel-title">Post-Shot Diagnosis</h2>
+        <div class="diagnosis-container">
+          <div class="summary-text" id="diag-summary">Run a shot simulation to receive laboratory diagnostic results.</div>
+          <div class="card-list" id="diag-cards">
+            <!-- Diagnosis cards injected here -->
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Smoke & Tolerance. An educational medieval physics project.</p>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

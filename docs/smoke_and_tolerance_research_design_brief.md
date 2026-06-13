@@ -272,17 +272,36 @@ The frontend should render frames returned from the Rust/WASM simulation rather 
 
 ---
 
-## 7. Initial Player Controls
+## 7. Initial Player Controls & Discrete Selections
 
-The first version should expose only a few high-level controls.
+To support deeper historical modeling and eventual material sourcing mechanics, the controls represent discrete craft choices rather than generic 0-100 sliders.
 
-| Variable | Meaning | Range | Primary effects |
-|---|---|---:|---|
-| Propellant condition | Abstract reliability and energetic consistency of the batch | 0–100 | ignition delay, pressure curve, smoke, residue |
-| Projectile fit | How well the projectile seals in the barrel | 0–100 | leakage, acceleration, stress, stuck-shot chance |
-| Barrel quality | Straightness, smoothness, and structural reliability | 0–100 | friction, stress hotspots, aim deviation |
-| Humidity | Environmental moisture | 0–100 | ignition reliability, reaction completeness, fouling |
-| Operator steadiness | Human stability and consistency | 0–100 | aim jitter, launch disturbance, target spread |
+### 7.1 Barrel Material
+*   **Bamboo Tube:** High elasticity but very low absolute strength. Splitting occurs along fiber lines, venting pressure safely but ruining the device.
+*   **Wrought Iron Staves:** Roll-welded staves bound with heated iron hoops. Prone to seam leakage and welds bursting under rapid pressure spikes.
+*   **Cast Bronze:** Heavy and expensive, but structurally sound. Susceptible to casting voids (air pockets) that cause unexpected failure.
+
+### 7.2 Propellant Formula & Processing
+*   **Meal / Serpentine Powder:** Raw dry mix of charcoal, sulfur, and saltpeter. Highly inconsistent, burns slowly line-by-line, and components separate during travel.
+*   **Corned / Granulated Powder:** Damp-pressed, dried, and crushed cakes. Burns almost instantly due to inter-grain spacing, raising chamber pressure dramatically.
+*   **Refinement Level:** Abstract purity of saltpeter. Determines burn speed and residue accumulation.
+
+### 7.3 Projectile Type
+*   **Lead Arrow-Bolt:** Fitted with a rear leather wrap or tow packing. Aerodynamic, predictable trajectory, and good gas seal.
+*   **Pebble / Gravel Blast:** High scatter, low velocity, extreme muzzle spread. Renders as a blast cone of debris.
+*   **Rough Stone Sphere:** Medium weight, irregular shape, and rough surface. High windage (gas leakage) and rattles inside the barrel.
+*   **Lead Ball:** Heavy and malleable, creating a tighter seal (low windage) and high range.
+
+### 7.4 Sealing / Bore Packing (Wadding)
+*   **None:** High windage leakage. Weak velocity, massive soot blow-by, but very safe low peak pressure.
+*   **Tow Packing:** Coarse flax/hemp fibers packed behind the projectile. Moderate gas seal, moderate starting friction.
+*   **Clay Plug / Wood Wad:** Excellent gas seal. Spikes peak chamber pressure and starting friction, raising burst risks.
+
+### 7.5 Environmental Weather
+*   **Dry & Warm:** Ideal conditions. Consistent ignition and minimal fouling moisture.
+*   **Humid / Foggy:** Introduces moisture to the powder charge, causing delayed ignition and incomplete combustion.
+*   **Rainy:** High risk of priming powder wash-out or slow-match extinguishment.
+*   **Windy:** Blows away loose priming powder, introducing ignition delay and shaking operator aim.
 
 ---
 
@@ -809,16 +828,22 @@ Use these sources to guide historical flavor, visual references, and educational
 
 ---
 
-## 18. Open Research Questions
+## 18. Research Findings & Historical Modeling
 
-These are good questions to resolve before writing final in-game historical copy:
+### 18.1 Weather and Priming Protection
+For early hand cannons, priming was exposed at the top touch-hole, making rain, wind, and operator timing major factors:
+*   **Evolution:** Top touch-hole (exposed) -> Side touch-hole with simple pan -> Matchlock with pan cover -> Wheellock/Flintlock.
+*   **Game Model:** "Exposure window" mechanic. The longer the ignition sequence takes (due to player timing or damp slow-match), the more opportunity wind and rain have to blow away or ruin the priming powder.
 
-- Which fire-lance illustrations are late reconstructions, and which are based on period sources?
-- How should the game distinguish “fire lance,” “eruptor,” “hand cannon,” and “cannon” without implying a clean linear evolution?
-- How much should the game represent Mongol transmission, capture of engineers, and cross-cultural exchange?
-- Should Europe appear only after the player has explored Chinese and Eurasian developments?
-- Should the 1326–1327 Milemete cannon appear as a “visual source” module rather than as proof of first use?
-- How should uncertainty be shown to players when historians disagree?
+### 18.2 Projectile Irregularity & Windage
+Stone shot was rarely perfectly spherical, causing severe windage (gas blowing past the ball):
+*   **Effects:** A loose-fitting stone leaks gas, lowering muzzle velocity. It also rattles down the bore, exiting at a random angle (aim jitter). Rough stones cause localized friction scrapes.
+*   **Game Model:** Separate *surface roughness*, *bore fit*, and *shape regularity* variables. Irregular stones have fluctuating drag in flight and unpredictable exit angles.
+
+### 18.3 Sealing (Wadding)
+ sealiing aids were essential to prevent gas blow-by:
+*   **Evolution:** Early arrow cannons used leather sleeves around the bolt. Large siege artillery used packed clay/wood plugs. Later small arms used paper patches/cloth wads.
+*   **Game Model:** "Bore Packing Quality". No packing leads to heavy smoke/soot leakage and low speed. Clay or tight wood seals pressure efficiently but raises starting friction and stress levels.
 
 ---
 
