@@ -70,7 +70,8 @@ export class CutawayRenderer {
   public drawFrame(
     frame: ShotFrame,
     inputs: ShotInput,
-    isPaused: boolean = false
+    isPaused: boolean = false,
+    history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []
   ) {
     this.clear();
     
@@ -103,7 +104,7 @@ export class CutawayRenderer {
     }
 
     // --- DRAW TARGET RANGE (Right Side) ---
-    this.drawTargetRange(frame, projectileType);
+    this.drawTargetRange(frame, projectileType, history);
 
     // --- DRAW BARREL METALLURGY (Left Side on Cutaway Canvas with Shake) ---
     this.cutawayCtx.save();
@@ -1199,7 +1200,11 @@ export class CutawayRenderer {
     ctx.restore();
   }
 
-  private drawTargetRange(frame: ShotFrame, _projectileType: string) {
+  private drawTargetRange(
+    frame: ShotFrame,
+    _projectileType: string,
+    history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []
+  ) {
     const ctx = this.trajectoryCtx;
     const rangeLeft = 40;
     const rangeWidth = 520;
@@ -1241,6 +1246,50 @@ export class CutawayRenderer {
     ctx.beginPath();
     ctx.arc(targetX, targetCenterY, 5, 0, Math.PI * 2);
     ctx.fill();
+
+    // --- DRAW PREVIOUS TRAJECTORY (as a faded shadow) ---
+    if (history && history.length > 0) {
+      history.forEach((histItem, j) => {
+        const d = history.length - 1 - j;
+        // Scale opacity down for older history entries (decay effect)
+        const lineOpacity = Math.max(0.04, 0.35 * Math.pow(0.5, d));
+        const dotOpacity = Math.max(0.08, 0.60 * Math.pow(0.5, d));
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(140, 118, 98, ${lineOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+
+        const prevFlightFrames = histItem.frames.filter(
+          f => f.stage === 'flight' || f.stage === 'impact' || f.stage === 'aftermath'
+        );
+
+        if (prevFlightFrames.length > 0) {
+          ctx.beginPath();
+          ctx.moveTo(rangeLeft, shooterHeightY);
+          
+          prevFlightFrames.forEach(f => {
+            const prog = Math.min(1.0, f.projectileX / 35.0);
+            const px = rangeLeft + (prog * (rangeWidth - 40));
+            const py = groundY - (f.projectileY * 40.0);
+            ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+
+          // Draw faded previous impact point
+          const lastPrevFrame = prevFlightFrames[prevFlightFrames.length - 1];
+          const lastProg = Math.min(1.0, lastPrevFrame.projectileX / 35.0);
+          const lastPx = rangeLeft + (lastProg * (rangeWidth - 40));
+          const lastPy = groundY - (lastPrevFrame.projectileY * 40.0);
+
+          ctx.fillStyle = `rgba(140, 118, 98, ${dotOpacity})`;
+          ctx.beginPath();
+          ctx.arc(lastPx, lastPy, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+    }
 
     if (frame.stage === 'flight' || frame.stage === 'impact') {
       ctx.save();

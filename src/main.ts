@@ -2,14 +2,17 @@ import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame } from './t
 import { CutawayRenderer } from './render/CutawayRenderer';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { Timeline } from './ui/Timeline';
+import { ComparisonPanel } from './ui/ComparisonPanel';
 
 class LaboratoryApp {
   private renderer!: CutawayRenderer;
   private controls!: ControlsPanel;
   private timeline!: Timeline;
   private worker!: Worker;
+  private comparisonPanel!: ComparisonPanel;
 
   private currentInputs: ShotInput | null = null;
+  private shotHistory: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = [];
   private isInitialLoad: boolean = true;
   private hasFiredShot: boolean = false;
   private persistentFouling: number = 0.0;
@@ -57,6 +60,19 @@ class LaboratoryApp {
         if (this.isInitialLoad) {
           this.isInitialLoad = false;
         } else {
+          // Update comparison panel
+          // Update comparison panel
+          const prev = this.shotHistory[this.shotHistory.length - 1];
+          if (prev) {
+            this.comparisonPanel.update(
+              this.currentInputs!,
+              frames,
+              prev.inputs,
+              prev.frames
+            );
+          } else {
+            this.comparisonPanel.hide();
+          }
           this.timeline.play();
         }
 
@@ -75,6 +91,7 @@ class LaboratoryApp {
     // 2. Instantiate Components
     this.renderer = new CutawayRenderer('sim-cutaway-canvas', 'sim-trajectory-canvas');
     this.renderer.clear();
+    this.comparisonPanel = new ComparisonPanel();
 
     this.controls = new ControlsPanel((inputs) => {
       this.selectTab('charts');
@@ -90,10 +107,11 @@ class LaboratoryApp {
           this.renderer.drawFrame(
             frame,
             this.currentInputs,
-            !this.timeline.isPlaying
+            !this.timeline.isPlaying,
+            this.shotHistory
           );
           this.updateChemistryDashboard(frame, this.currentInputs);
-          this.renderCharts(frames, index);
+          this.renderCharts(frames, index, this.shotHistory);
         }
       },
       () => {
@@ -101,6 +119,11 @@ class LaboratoryApp {
         this.persistentFouling = 0.0;
         this.updateFoulingMeter();
         this.renderer.setSootLevel(0);
+        
+        // Reset comparison
+        this.shotHistory = [];
+        this.comparisonPanel.hide();
+
         this.selectTab('instruments');
         // Refire current settings
         this.handleFireShot(this.controls.getInputs());
@@ -138,7 +161,7 @@ class LaboratoryApp {
     tabContentCharts?.classList.toggle('active', activeTab === 'charts');
 
     if (activeTab === 'charts' && this.lastRenderedFrames.length > 0) {
-      this.renderCharts(this.lastRenderedFrames, this.lastRenderedFrameIndex);
+      this.renderCharts(this.lastRenderedFrames, this.lastRenderedFrameIndex, this.shotHistory);
     }
   }
 
@@ -162,6 +185,16 @@ class LaboratoryApp {
   }
 
   private handleFireShot(inputs: ShotInput) {
+    if (this.hasFiredShot && this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
+      this.shotHistory.push({
+        inputs: { ...this.currentInputs },
+        frames: [...this.lastRenderedFrames]
+      });
+      if (this.shotHistory.length > 4) {
+        this.shotHistory.shift();
+      }
+    }
+
     this.hasFiredShot = true;
     inputs.persistentFouling = this.persistentFouling;
     this.currentInputs = inputs;
@@ -321,7 +354,7 @@ class LaboratoryApp {
     }
   }
 
-  private renderCharts(frames: ShotFrame[], currentIndex: number) {
+  private renderCharts(frames: ShotFrame[], currentIndex: number, history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []) {
     const canvas = document.getElementById('chem-charts-canvas') as HTMLCanvasElement;
     if (!canvas) return;
 
@@ -353,8 +386,19 @@ class LaboratoryApp {
       isMass: boolean;
     }
 
-    const maxPressure = Math.max(...frames.map(f => f.pressure));
-    const maxTemp = Math.max(...frames.map(f => f.temperature));
+    const maxPressureCur = Math.max(...frames.map(f => f.pressure));
+    const maxTempCur = Math.max(...frames.map(f => f.temperature));
+    let maxPressure = maxPressureCur;
+    let maxTemp = maxTempCur;
+
+    if (history && history.length > 0) {
+      history.forEach(hist => {
+        const pMax = Math.max(...hist.frames.map(f => f.pressure));
+        const tMax = Math.max(...hist.frames.map(f => f.temperature));
+        maxPressure = Math.max(maxPressure, pMax);
+        maxTemp = Math.max(maxTemp, tMax);
+      });
+    }
 
     const plots: ChartPlot[] = [
       {
@@ -416,7 +460,61 @@ class LaboratoryApp {
         return;
       }
 
-      // Render chart data line
+      // Render history curves (if any) with opacity decay
+      const colorMap: Record<string, string> = {
+        '#d94e34': '217, 78, 52',
+        '#ffb703': '255, 183, 3',
+        '#a8947b': '168, 148, 123',
+        '#e6c387': '230, 195, 135'
+      };
+
+      if (history && history.length > 0) {
+        history.forEach((histItem, j) => {
+          const d = history.length - 1 - j;
+          // Scale opacity down for older history entries (decay effect)
+          const lineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
+          const gasLineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
+
+          ctx.save();
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          
+          ctx.beginPath();
+          histItem.frames.forEach((frame, idx) => {
+            const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
+            if (plot.isMass) {
+              const mUnburned = frame.unburnedMass * 1000;
+              const y = plotY + plotH - (mUnburned / plot.maxVal) * plotH;
+              if (idx === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            } else {
+              const val = frame[plot.valKey!] as number;
+              const y = plotY + plotH - (val / plot.maxVal) * plotH;
+              if (idx === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+          });
+          ctx.strokeStyle = plot.isMass ? `rgba(168, 148, 123, ${lineOpacity})` : `rgba(${colorMap[plot.color] || '140, 118, 98'}, ${lineOpacity})`;
+          ctx.stroke();
+
+          // If mass plot, render chamber gas curve on top in muted gold dash
+          if (plot.isMass) {
+            ctx.beginPath();
+            histItem.frames.forEach((frame, idx) => {
+              const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
+              const mGas = frame.gasMass * 1000;
+              const y = plotY + plotH - (mGas / plot.maxVal) * plotH;
+              if (idx === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = `rgba(230, 195, 135, ${gasLineOpacity})`;
+            ctx.stroke();
+          }
+          ctx.restore();
+        });
+      }
+
+      // Render current chart data line
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       frames.forEach((frame, idx) => {
@@ -464,15 +562,48 @@ class LaboratoryApp {
       if (currentIndex < frames.length) {
         const curFrame = frames[currentIndex];
         let valText = '';
+
+        // Find corresponding previous frame (immediate last shot in history)
+        let prevFrame: ShotFrame | null = null;
+        const prevItem = history[history.length - 1];
+        if (prevItem && prevItem.frames.length > 0) {
+          const ratio = currentIndex / (frames.length - 1);
+          const prevIndex = Math.round(ratio * (prevItem.frames.length - 1));
+          prevFrame = prevItem.frames[prevIndex] || null;
+        }
+
         if (plot.isMass) {
-          valText = `Powder: ${(curFrame.unburnedMass * 1000).toFixed(1)}g / Gas: ${(curFrame.gasMass * 1000).toFixed(1)}g`;
+          const curPowder = curFrame.unburnedMass * 1000;
+          const curGas = curFrame.gasMass * 1000;
+          valText = `Powder: ${curPowder.toFixed(1)}g / Gas: ${curGas.toFixed(1)}g`;
+          if (prevFrame) {
+            const prevPowder = prevFrame.unburnedMass * 1000;
+            const prevGas = prevFrame.gasMass * 1000;
+            valText += ` (Prev Powder: ${prevPowder.toFixed(1)}g / Gas: ${prevGas.toFixed(1)}g)`;
+          }
         } else {
           const val = curFrame[plot.valKey!] as number;
           valText = val.toFixed(1) + plot.unit;
+          if (prevFrame) {
+            const prevVal = prevFrame[plot.valKey!] as number;
+            valText += ` (Prev: ${prevVal.toFixed(1)}${plot.unit})`;
+          }
         }
+
+        ctx.save();
         ctx.fillStyle = 'rgba(207, 168, 107, 0.9)';
         ctx.font = 'normal 8px Share Tech Mono, monospace';
-        ctx.fillText(valText, scrubX + 4, plotY + plotH - 5);
+        
+        // Adjust alignment depending on right boundary to prevent visual clipping
+        let textX = scrubX + 4;
+        if (scrubX > plotX + plotW - 80) {
+          ctx.textAlign = 'right';
+          textX = scrubX - 4;
+        } else {
+          ctx.textAlign = 'left';
+        }
+        ctx.fillText(valText, textX, plotY + plotH - 5);
+        ctx.restore();
       }
     });
 
