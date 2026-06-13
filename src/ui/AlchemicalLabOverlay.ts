@@ -1,4 +1,5 @@
 import { AlchemicalMix } from '../types';
+import { AudioManager } from '../audio/AudioManager';
 
 interface MaterialProps {
   name: string;
@@ -157,6 +158,9 @@ export class AlchemicalLabOverlay {
       clearInterval(this.calAnimTimer);
       this.calAnimTimer = null;
     }
+    // Stop lab sounds
+    AudioManager.getInstance().stopDishTest();
+    AudioManager.getInstance().stopTensileTest();
   }
 
   private initEventListeners() {
@@ -175,6 +179,7 @@ export class AlchemicalLabOverlay {
         this.tabPanels.forEach(panel => {
           panel.classList.toggle('active', panel.id === `lab-tab-${tab}`);
         });
+        this.cancelAnimations();
       });
     });
 
@@ -413,6 +418,7 @@ export class AlchemicalLabOverlay {
         if (matchY >= h - 45) {
           matchActive = false;
           flameActive = true;
+          AudioManager.getInstance().playDishTest(burnSpeed);
         }
       }
 
@@ -546,6 +552,7 @@ export class AlchemicalLabOverlay {
     const woodMult = this.activeMix.charcoalSource === 'willow' ? 1.25 : this.activeMix.charcoalSource === 'alder' ? 1.0 : 0.8;
 
     const peakP = 12.0 * stoichiometryFactor * purityFactor * woodMult;
+    AudioManager.getInstance().playCalorimeterTest(peakP);
     const peakT = 293.15 + 2100.0 * stoichiometryFactor * purityFactor;
 
     let t = 0;
@@ -606,23 +613,35 @@ export class AlchemicalLabOverlay {
     let elasticStrain = stress / (matProps.modulus * 10.0);
     let plasticStrain = 0.0;
 
+    if (sliderVal > 1 && !this.tensileIsBroken) {
+      AudioManager.getInstance().startTensileTest(this.selectedMaterial);
+    }
+
     if (this.tensileIsBroken) {
       stress = 0.0;
       elasticStrain = 0.0;
+      AudioManager.getInstance().updateTensileLoad(sliderVal, true);
     } else {
       if (stress >= matProps.ultimate) {
         this.tensileIsBroken = true;
         this.tensilePermanentStrain = 0.15;
         this.txtTensileStatus.textContent = 'RUPTURED (SNAP)';
         this.txtTensileStatus.style.color = '#9e2a2b';
+        AudioManager.getInstance().updateTensileLoad(sliderVal, true);
       } else if (stress >= matProps.yield) {
         plasticStrain = ((stress - matProps.yield) / (matProps.ultimate - matProps.yield)) * 0.08;
         this.tensilePermanentStrain = Math.max(this.tensilePermanentStrain, plasticStrain);
         this.txtTensileStatus.textContent = 'PLASTIC DEFORMATION';
         this.txtTensileStatus.style.color = '#ff9f1c';
+        AudioManager.getInstance().updateTensileLoad(sliderVal, false);
       } else {
         this.txtTensileStatus.textContent = stress > 2.0 ? 'ELASTIC TENSION' : 'UNLOADED';
         this.txtTensileStatus.style.color = '#6e5e4f';
+        if (sliderVal <= 1) {
+          AudioManager.getInstance().stopTensileTest();
+        } else {
+          AudioManager.getInstance().updateTensileLoad(sliderVal, false);
+        }
       }
     }
 

@@ -91,12 +91,16 @@ export class Timeline {
   }
 
   public pause() {
+    const wasPlaying = this.isPlaying;
     this.isPlaying = false;
     this.playIcon.textContent = '▶';
     this.playText.textContent = 'PLAY';
     if (this.playIntervalId !== null) {
       clearInterval(this.playIntervalId);
       this.playIntervalId = null;
+    }
+    if (wasPlaying) {
+      this.renderCurrentFrame();
     }
   }
 

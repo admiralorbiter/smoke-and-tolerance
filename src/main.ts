@@ -1,4 +1,5 @@
 import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY, AlchemicalMix } from './types';
+import { AudioManager } from './audio/AudioManager';
 import { CutawayRenderer } from './render/CutawayRenderer';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { Timeline } from './ui/Timeline';
@@ -158,6 +159,12 @@ class LaboratoryApp {
           );
           this.updateChemistryDashboard(frame, this.currentInputs);
           this.renderCharts(frames, index, this.shotHistory);
+          AudioManager.getInstance().handleFrame(
+            frame,
+            index,
+            this.timeline.isPlaying,
+            this.currentInputs
+          );
         }
       },
       () => {
@@ -171,6 +178,7 @@ class LaboratoryApp {
         this.comparisonPanel.hide();
 
         this.selectTab('instruments');
+        AudioManager.getInstance().playCleanBore();
         // Refire current settings
         this.handleFireShot(this.controls.getInputs());
       }
@@ -268,6 +276,7 @@ class LaboratoryApp {
       initialInputs.alchemicalMix = this.customAlchemicalMix;
     }
     this.currentInputs = initialInputs;
+    AudioManager.getInstance().updateAmbientWind(initialInputs.weatherWind);
     this.worker.postMessage({ input: initialInputs });
   }
 
@@ -292,6 +301,7 @@ class LaboratoryApp {
     this.currentInputs = inputs;
     this.controls.setFiringState(true);
     inputs.primingQuality = 100.0;
+    AudioManager.getInstance().updateAmbientWind(inputs.weatherWind);
     this.worker.postMessage({ input: inputs });
   }
 

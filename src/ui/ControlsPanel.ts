@@ -1,4 +1,5 @@
 import { ShotInput } from '../types';
+import { AudioManager } from '../audio/AudioManager';
 
 export class ControlsPanel {
   private onFireCallback: (inputs: ShotInput) => void;
@@ -38,6 +39,7 @@ export class ControlsPanel {
 
     this.sliderWind.addEventListener('input', () => {
       this.valWind.textContent = `${this.sliderWind.value}%`;
+      AudioManager.getInstance().updateAmbientWind(parseFloat(this.sliderWind.value));
     });
 
     this.sliderRain.addEventListener('input', () => {
