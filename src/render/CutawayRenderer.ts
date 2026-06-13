@@ -104,7 +104,7 @@ export class CutawayRenderer {
     }
 
     // --- DRAW TARGET RANGE (Right Side) ---
-    this.drawTargetRange(frame, projectileType, history);
+    this.drawTargetRange(frame, projectileType, history, inputs);
 
     // --- DRAW BARREL METALLURGY (Left Side on Cutaway Canvas with Shake) ---
     this.cutawayCtx.save();
@@ -322,6 +322,72 @@ export class CutawayRenderer {
     ctx.fillRect(barrelLeft + 40, centerY - boreRadiusPx - 20, 8, 20);
     ctx.strokeStyle = '#3d3228';
     ctx.strokeRect(barrelLeft + 40, centerY - boreRadiusPx - 20, 8, 20);
+
+    // Draw Weather Protection cover over touch-hole Breech
+    if (inputs.weatherProtection && inputs.weatherProtection !== 'none') {
+      if (inputs.weatherProtection === 'parchment') {
+        ctx.save();
+        ctx.fillStyle = '#bfa57a'; // tan parchment paper
+        ctx.strokeStyle = '#6e5e4f';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(barrelLeft + 30, centerY - boreRadiusPx - 24, 28, 6);
+        ctx.strokeRect(barrelLeft + 30, centerY - boreRadiusPx - 24, 28, 6);
+        // Ties / threads holding it
+        ctx.strokeStyle = '#4a3f35';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(barrelLeft + 32, centerY - boreRadiusPx - 24);
+        ctx.lineTo(barrelLeft + 32, centerY - boreRadiusPx - 18);
+        ctx.moveTo(barrelLeft + 56, centerY - boreRadiusPx - 24);
+        ctx.lineTo(barrelLeft + 56, centerY - boreRadiusPx - 18);
+        ctx.stroke();
+        ctx.restore();
+      } else if (inputs.weatherProtection === 'pan_shield') {
+        ctx.save();
+        ctx.fillStyle = wallColor; // matches barrel color (bronze/iron)
+        ctx.strokeStyle = '#3d3228';
+        ctx.lineWidth = 2;
+        // Draw a metal shield cover pivoting above touchhole
+        ctx.beginPath();
+        ctx.arc(barrelLeft + 44, centerY - boreRadiusPx - 22, 10, Math.PI, 0); // semi-circle dome
+        ctx.lineTo(barrelLeft + 54, centerY - boreRadiusPx - 20);
+        ctx.lineTo(barrelLeft + 34, centerY - boreRadiusPx - 20);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Hinge pin
+        ctx.fillStyle = '#ffb703'; // brass pin
+        ctx.beginPath();
+        ctx.arc(barrelLeft + 34, centerY - boreRadiusPx - 20, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (inputs.weatherProtection === 'operator_cowl') {
+        ctx.save();
+        ctx.fillStyle = '#221e1a'; // dark cowl fabric
+        ctx.strokeStyle = '#120f0c';
+        ctx.lineWidth = 1.5;
+        // Draw a draping sleeve/cloth texture over the touchhole area
+        ctx.beginPath();
+        ctx.moveTo(barrelLeft + 15, centerY - boreRadiusPx - 35);
+        ctx.quadraticCurveTo(barrelLeft + 44, centerY - boreRadiusPx - 30, barrelLeft + 70, centerY - boreRadiusPx - 35);
+        ctx.lineTo(barrelLeft + 65, centerY - boreRadiusPx - 15);
+        ctx.quadraticCurveTo(barrelLeft + 44, centerY - boreRadiusPx - 18, barrelLeft + 20, centerY - boreRadiusPx - 15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Fabric folds lines
+        ctx.strokeStyle = '#3d3630';
+        ctx.beginPath();
+        ctx.moveTo(barrelLeft + 25, centerY - boreRadiusPx - 32);
+        ctx.lineTo(barrelLeft + 30, centerY - boreRadiusPx - 20);
+        ctx.moveTo(barrelLeft + 55, centerY - boreRadiusPx - 32);
+        ctx.lineTo(barrelLeft + 50, centerY - boreRadiusPx - 20);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     // Draw Bamboo Knots / Iron Seams for flavor (if not ruptured or drawing on remaining wall parts)
     if (barrelMaterial === 'bamboo' && !isRuptured) {
@@ -1225,13 +1291,73 @@ export class CutawayRenderer {
   private drawTargetRange(
     frame: ShotFrame,
     _projectileType: string,
-    history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []
+    history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = [],
+    inputs?: ShotInput
   ) {
     const ctx = this.trajectoryCtx;
     const rangeLeft = 40;
     const rangeWidth = 520;
     const groundY = 250;
     const shooterHeightY = 202; // aligned with 1.2m launch height
+
+    // Draw Weather Overlays on Range (behind the target and curves)
+    if (inputs) {
+      const humidity = inputs.weatherHumidity;
+      const wind = inputs.weatherWind;
+      const rain = inputs.weatherRain;
+
+      // 1. Fog / Mist (Humidity)
+      if (humidity > 50) {
+        ctx.save();
+        const mistGrad = ctx.createLinearGradient(0, groundY - 120, 0, groundY);
+        const opacity = Math.min(0.35, (humidity - 50) / 100);
+        mistGrad.addColorStop(0, `rgba(100, 100, 100, 0.0)`);
+        mistGrad.addColorStop(1, `rgba(120, 120, 120, ${opacity})`);
+        ctx.fillStyle = mistGrad;
+        ctx.fillRect(rangeLeft, groundY - 120, rangeWidth, 120);
+        ctx.restore();
+      }
+
+      // 2. Wind flows
+      if (wind > 10) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(180, 170, 160, ${Math.min(0.20, wind / 400)})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([30, 90]);
+        const scrollOffset = (frame.timeMs * 2.0) % 200;
+        ctx.beginPath();
+        for (let y = groundY - 100; y < groundY; y += 35) {
+          ctx.moveTo(rangeLeft - scrollOffset, y);
+          ctx.bezierCurveTo(
+            rangeLeft + rangeWidth/3 - scrollOffset, y - 8,
+            rangeLeft + 2*rangeWidth/3 - scrollOffset, y + 8,
+            rangeLeft + rangeWidth - scrollOffset + 150, y
+          );
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 3. Rain drops (angle scales with wind speed)
+      if (rain > 10) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(100, 120, 150, ${Math.min(0.35, rain / 150)})`;
+        ctx.lineWidth = 1;
+        const tSeed = Math.round(frame.timeMs * 0.4) % 10;
+        const rainAngle = (wind / 100) * 15; // 0 to 15 degrees angle
+        ctx.beginPath();
+        for (let x = rangeLeft - 50; x < rangeLeft + rangeWidth + 50; x += 18) {
+          const yOffset = (tSeed * 12) % 40;
+          for (let y = groundY - 120 + yOffset; y < groundY; y += 40) {
+            const dx = Math.tan(rainAngle * Math.PI / 180) * 25;
+            ctx.moveTo(x + dx, y);
+            ctx.lineTo(x, y + 25);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     // Draw ground
     ctx.strokeStyle = '#2d241c';

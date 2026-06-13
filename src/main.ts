@@ -21,6 +21,7 @@ class LaboratoryApp {
   private persistentFouling: number = 0.0;
   private activeEra: string = 'hand_cannon';
 
+  private activeWeatherProtection: string = 'none';
   private customMixActive: boolean = false;
   private customAlchemicalMix: AlchemicalMix = {
     saltpeterRatio: 75.0,
@@ -28,6 +29,7 @@ class LaboratoryApp {
     sulfurRatio: 10.0,
     charcoalSource: 'alder',
     saltpeterPurity: 50.0,
+    weatherProtection: 'none',
   };
 
   private lastRenderedFrameIndex: number = 0;
@@ -116,13 +118,25 @@ class LaboratoryApp {
 
     // Instantiate Alchemical Synthesis Lab
     this.labOverlay = new AlchemicalLabOverlay((mix, material) => {
-      this.customMixActive = true;
+      // Decouple touch-hole protection from custom mixes
+      const ratiosChanged = 
+        mix.saltpeterRatio !== this.customAlchemicalMix.saltpeterRatio ||
+        mix.charcoalRatio !== this.customAlchemicalMix.charcoalRatio ||
+        mix.sulfurRatio !== this.customAlchemicalMix.sulfurRatio ||
+        mix.charcoalSource !== this.customAlchemicalMix.charcoalSource ||
+        mix.saltpeterPurity !== this.customAlchemicalMix.saltpeterPurity;
+
       this.customAlchemicalMix = { ...mix };
-      this.controls.setCustomMixActive(true);
+      this.activeWeatherProtection = mix.weatherProtection || 'none';
+
+      if (ratiosChanged || this.customMixActive) {
+        this.customMixActive = true;
+        this.controls.setCustomMixActive(true);
+        const banner = document.getElementById('custom-batch-indicator');
+        if (banner) banner.style.display = 'flex';
+      }
+
       this.controls.setBarrelMaterial(material);
-      
-      const banner = document.getElementById('custom-batch-indicator');
-      if (banner) banner.style.display = 'flex';
       
       this.shotHistory = [];
       this.comparisonPanel.hide();
@@ -187,7 +201,8 @@ class LaboratoryApp {
     // 5. Alchemical Workbench Toggle Listeners
     const btnOpenLab = document.getElementById('btn-open-lab');
     btnOpenLab?.addEventListener('click', () => {
-      this.labOverlay.show(this.customAlchemicalMix, this.controls.getInputs().barrelMaterial);
+      this.customAlchemicalMix.weatherProtection = this.activeWeatherProtection;
+      this.labOverlay.show(this.customAlchemicalMix, this.controls.getInputs().barrelMaterial, this.activeEra);
     });
 
     const btnResetBatch = document.getElementById('btn-reset-batch');
@@ -247,6 +262,7 @@ class LaboratoryApp {
     const initialInputs = this.controls.getInputs();
     initialInputs.primingQuality = 100.0;
     initialInputs.persistentFouling = this.persistentFouling;
+    initialInputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
       initialInputs.customMixActive = true;
       initialInputs.alchemicalMix = this.customAlchemicalMix;
@@ -268,6 +284,7 @@ class LaboratoryApp {
 
     this.hasFiredShot = true;
     inputs.persistentFouling = this.persistentFouling;
+    inputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
       inputs.customMixActive = true;
       inputs.alchemicalMix = this.customAlchemicalMix;
@@ -743,6 +760,12 @@ class LaboratoryApp {
       this.controls.setCustomMixActive(false);
       const banner = document.getElementById('custom-batch-indicator');
       if (banner) banner.style.display = 'none';
+    }
+
+    // Adapt active protection if restricted in the new era
+    if (this.activeWeatherProtection === 'pan_shield' && ['strange_fire', 'fire_delivered', 'directional_blast'].includes(eraId)) {
+      this.activeWeatherProtection = 'none';
+      this.customAlchemicalMix.weatherProtection = 'none';
     }
 
     // Apply setting locks

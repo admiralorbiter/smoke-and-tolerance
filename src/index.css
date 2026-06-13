@@ -1630,3 +1630,86 @@ footer a {
   font-family: var(--font-serif);
 }
 
+/* Weather System and Protections Styles */
+.weather-details-group {
+  border: 1px solid var(--border-ink);
+  border-radius: 3px;
+  background-color: rgba(20, 17, 14, 0.4);
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+}
+
+.weather-details-group summary {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--accent-gold);
+  cursor: pointer;
+  outline: none;
+  font-weight: bold;
+  padding: 0.25rem 0.5rem;
+  user-select: none;
+}
+
+.weather-details-group summary::-webkit-details-marker {
+  color: var(--accent-gold);
+}
+
+.weather-details-group[open] summary {
+  border-bottom: 1px dashed var(--border-ink);
+  margin-bottom: 0.5rem;
+}
+
+.weather-slider-group {
+  margin-top: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.protection-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.protection-card {
+  background-color: #0c0a09;
+  border: 1px solid var(--border-ink);
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.protection-card:hover {
+  border-color: var(--text-dim);
+}
+
+.protection-card.active {
+  border-color: var(--accent-gold);
+  background: rgba(207, 168, 107, 0.05);
+}
+
+.protection-card.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  border-color: #2b241e;
+}
+
+.protection-card.disabled:hover {
+  border-color: #2b241e;
+}
+
+.protection-card .title {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--text-ink);
+}
+
+.protection-card .description {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
+

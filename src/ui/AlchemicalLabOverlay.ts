@@ -46,6 +46,7 @@ export class AlchemicalLabOverlay {
   private txtSulfur = document.getElementById('readout-sulfur') as HTMLSpanElement;
   private txtCharcoal = document.getElementById('readout-charcoal') as HTMLSpanElement;
   private charcoalCards = document.querySelectorAll('.charcoal-card');
+  private protectionCards = document.querySelectorAll('.protection-card');
   private btnCrystallize = document.getElementById('btn-crystallize') as HTMLButtonElement;
   private barCrystallize = document.getElementById('crystallization-bar') as HTMLDivElement;
   private txtCrystallize = document.getElementById('crystallization-text') as HTMLSpanElement;
@@ -94,16 +95,37 @@ export class AlchemicalLabOverlay {
     this.drawTensileChart();
   }
 
-  public show(mix: AlchemicalMix, material: string) {
+  public show(mix: AlchemicalMix, material: string, activeEra: string) {
     this.activeMix = { ...mix };
+    if (!this.activeMix.weatherProtection) {
+      this.activeMix.weatherProtection = 'none';
+    }
     this.selectedMaterial = material;
+
+    // Lock pan cover in early Eras (strange_fire, fire_delivered, directional_blast)
+    const panCoverCard = Array.from(this.protectionCards).find(card => card.getAttribute('data-protection') === 'pan_shield');
+    if (panCoverCard) {
+      const isLocked = ['strange_fire', 'fire_delivered', 'directional_blast'].includes(activeEra);
+      panCoverCard.classList.toggle('disabled', isLocked);
+      if (isLocked) {
+        const desc = panCoverCard.querySelector('.description');
+        if (desc) desc.textContent = '🔒 Pivoting metal pan cover. Restricted in early Eras (Era IV+ only).';
+        if (this.activeMix.weatherProtection === 'pan_shield') {
+          this.activeMix.weatherProtection = 'none';
+        }
+      } else {
+        const desc = panCoverCard.querySelector('.description');
+        if (desc) desc.textContent = 'Pivoting metal shield. Reduces rain and wind risk by 80%. Slight weight offset (+1.0° aim bias). Era IV+ only.';
+      }
+    }
     
     // Sync UI elements to active state
     this.updateTernaryMarkerFromRatios();
     this.syncCharcoalCards();
+    this.syncProtectionCards();
     this.updateCrystallizationUI();
     this.syncMaterialCouponUI();
-    this.lblFooterSummary.textContent = `${this.activeMix.saltpeterRatio.toFixed(1)}% Nitrum / ${this.activeMix.charcoalRatio.toFixed(1)}% Carbo / ${this.activeMix.sulfurRatio.toFixed(1)}% Sulphur (${this.getFriendlyWoodName(this.activeMix.charcoalSource)})`;
+    this.updateFooterLabel();
     
     // Reset test displays
     this.txtBurnVel.textContent = '-';
@@ -186,6 +208,17 @@ export class AlchemicalLabOverlay {
         const source = card.getAttribute('data-source') as 'willow' | 'alder' | 'oak';
         this.activeMix.charcoalSource = source;
         this.syncCharcoalCards();
+        this.updateFooterLabel();
+      });
+    });
+
+    // Touch-hole protection selection
+    this.protectionCards.forEach(card => {
+      card.addEventListener('click', () => {
+        if (card.classList.contains('disabled')) return;
+        const protection = card.getAttribute('data-protection') || 'none';
+        this.activeMix.weatherProtection = protection;
+        this.syncProtectionCards();
         this.updateFooterLabel();
       });
     });
@@ -725,6 +758,27 @@ export class AlchemicalLabOverlay {
   }
 
   private updateFooterLabel() {
-    this.lblFooterSummary.textContent = `${this.activeMix.saltpeterRatio.toFixed(1)}% Nitrum / ${this.activeMix.charcoalRatio.toFixed(1)}% Carbo / ${this.activeMix.sulfurRatio.toFixed(1)}% Sulphur (${this.getFriendlyWoodName(this.activeMix.charcoalSource)})`;
+    const protText = this.activeMix.weatherProtection && this.activeMix.weatherProtection !== 'none'
+      ? ` [Protected: ${this.getFriendlyProtectionName(this.activeMix.weatherProtection)}]`
+      : '';
+    this.lblFooterSummary.textContent = `${this.activeMix.saltpeterRatio.toFixed(1)}% Nitrum / ${this.activeMix.charcoalRatio.toFixed(1)}% Carbo / ${this.activeMix.sulfurRatio.toFixed(1)}% Sulphur (${this.getFriendlyWoodName(this.activeMix.charcoalSource)})${protText}`;
+  }
+
+  private syncProtectionCards() {
+    const activeProt = this.activeMix.weatherProtection || 'none';
+    this.protectionCards.forEach(card => {
+      const prot = card.getAttribute('data-protection');
+      card.classList.toggle('active', prot === activeProt);
+    });
+  }
+
+  private getFriendlyProtectionName(key: string): string {
+    const map: Record<string, string> = {
+      none: 'None',
+      parchment: 'Oiled Parchment',
+      pan_shield: 'Pan Shield',
+      operator_cowl: 'Operator Cowl'
+    };
+    return map[key] || key;
   }
 }

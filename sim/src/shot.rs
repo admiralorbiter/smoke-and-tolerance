@@ -12,6 +12,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     let mut frames = Vec::new();
     let mut outcomes = Vec::new();
+    let dt: f64 = 0.05; // ms step size
 
     // Physical dimensions & constants
     let barrel_length = 0.30; // 30 cm barrel length
@@ -160,56 +161,136 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let cp = gamma * cv; // Cp in J/(kg*K)
     let mut chamber_energy: f64 = gas_mass * cv * current_temp;
 
-    // 1. Check for absolute Misfire (Dud)
-    // Priming quality < 15.0, or extremely high fouling with wet/damp powder
-    let is_dud = input.priming_quality < 15.0 || (input.persistent_fouling > 0.9 && is_damp);
+    // 1. Calculate weather protection factors
+    let weather_protection = input.weather_protection.clone().unwrap_or("none".to_string());
+    let mut rain_coeff = 1.0;
+    let mut wind_coeff = 1.0;
+    let mut protection_delay = 0.0;
 
-    if is_dud {
-        outcomes.push("misfire".to_string());
-        for step in 0..15 {
-            let t = step as f64 / 15.0;
+    match weather_protection.as_str() {
+        "parchment" => {
+            rain_coeff = 0.1;
+            protection_delay = 4.0;
+        }
+        "pan_shield" => {
+            rain_coeff = 0.2;
+            wind_coeff = 0.2;
+        }
+        "operator_cowl" => {
+            rain_coeff = 0.8;
+            wind_coeff = 0.0;
+        }
+        _ => {}
+    }
+
+    // 2. Determine Ignition Delay (in ms)
+    let base_ignition_delay = 2.0; // ms
+    let weather_ignition_delay = humidity_slowdown * 8.0;
+    let skill_ignition_delay = ((100.0 - input.priming_quality) * 0.15).max(0.0);
+    let damp_ignition_delay = if is_damp { 8.0 } else { 0.0 };
+    let fouling_ignition_delay = input.persistent_fouling * 6.0;
+    
+    let mut total_ignition_delay = base_ignition_delay 
+        + weather_ignition_delay 
+        + skill_ignition_delay 
+        + damp_ignition_delay 
+        + fouling_ignition_delay 
+        + protection_delay
+        + rng.gen_range(0.0..1.5);
+    
+    // Clamp to minimum of 0.1 ms to prevent division-by-zero or negative values
+    total_ignition_delay = total_ignition_delay.max(0.1);
+
+    // 3. Evaluate weather misfire probabilities (stochastic check performed once)
+    let rain_frac = input.weather_rain / 100.0;
+    let wind_frac = input.weather_wind / 100.0;
+
+    let rain_exp = rain_frac * rain_coeff;
+    let wind_exp = wind_frac * wind_coeff;
+
+    let wet_prob = 1.0 - (-0.25 * rain_exp * total_ignition_delay).exp();
+    let blown_prob = 1.0 - (-0.18 * wind_exp * total_ignition_delay).exp();
+
+    let roll_wet: f64 = rng.gen();
+    let roll_blown: f64 = rng.gen();
+
+    let is_rain_misfire = roll_wet < wet_prob;
+    let is_wind_misfire = roll_blown < blown_prob;
+
+    let is_dud = input.priming_quality < 15.0 || (input.persistent_fouling > 0.9 && is_damp);
+    let weather_misfire = is_rain_misfire || is_wind_misfire;
+
+    if is_dud || weather_misfire {
+        if is_rain_misfire {
+            outcomes.push("misfire_rain".to_string());
+        } else if is_wind_misfire {
+            outcomes.push("misfire_wind".to_string());
+        } else {
+            outcomes.push("misfire".to_string());
+        }
+
+        let total_misfire_duration = total_ignition_delay + 2.0;
+        let misfire_steps = (total_misfire_duration / dt) as usize;
+
+        for step in 0..misfire_steps {
+            let step_time = step as f64 * dt;
+            let (temp_now, smoke_now, warnings_now) = if step_time < total_ignition_delay {
+                let progress = step_time / total_ignition_delay;
+                (
+                    293.15 + (temp_ignition - 293.15) * progress,
+                    0.05 * progress,
+                    vec!["Priming powder burning...".to_string()]
+                )
+            } else {
+                let decay = (-1.5 * (step_time - total_ignition_delay)).exp();
+                let msg = if is_rain_misfire {
+                    "Priming powder washed out by rain".to_string()
+                } else if is_wind_misfire {
+                    "Priming powder blown away by wind".to_string()
+                } else {
+                    "Priming failed to catch (Damp/Poor quality)".to_string()
+                };
+                (
+                    293.15 + (temp_ignition - 293.15) * decay,
+                    0.1 * decay,
+                    vec![msg]
+                )
+            };
+
             frames.push(ShotFrame {
-                t,
-                time_ms: step as f64 * 0.5,
+                t: 0.0, // normalized later
+                time_ms: step_time,
                 stage: "ignition".to_string(),
                 projectile_x: 0.0,
                 projectile_y: 0.0,
                 projectile_velocity: 0.0,
-                pressure: 0.0,
+                pressure: 0.1,
                 leakage: 0.0,
                 barrel_stress: 0.0,
-                smoke: 0.2 * (1.0 - t),
-                fouling: 0.0,
+                smoke: smoke_now,
+                fouling: input.persistent_fouling * 500.0,
                 aim_offset: 0.0,
-                warnings: vec!["Priming failed to catch (Damp/Blown out)".to_string()],
+                warnings: warnings_now,
                 unburned_mass: propellant_mass,
                 gas_mass: 0.0,
-                temperature: 293.15,
+                temperature: temp_now,
                 grain_r: grain_r0,
                 wall_heat_loss: 0.0,
                 fouling_index: input.persistent_fouling,
                 burn_profile_code,
             });
         }
+
+        let frame_count = frames.len();
+        for i in 0..frame_count {
+            frames[i].t = i as f64 / (frame_count - 1).max(1) as f64;
+        }
+
         return diagnosis::generate_result(input, frames, outcomes);
     }
 
-    // 2. Determine Ignition Delay (in ms)
-    let base_ignition_delay = 2.0; // ms
-    let weather_ignition_delay = humidity_slowdown * 8.0;
-    let skill_ignition_delay = (100.0 - input.priming_quality) * 0.15;
-    let damp_ignition_delay = if is_damp { 8.0 } else { 0.0 };
-    let fouling_ignition_delay = input.persistent_fouling * 6.0;
-    let total_ignition_delay = base_ignition_delay 
-        + weather_ignition_delay 
-        + skill_ignition_delay 
-        + damp_ignition_delay 
-        + fouling_ignition_delay 
-        + rng.gen_range(0.0..1.5);
-
     // Initial state variables
     let mut time_ms: f64 = 0.0;
-    let dt: f64 = 0.05; // ms step size
     let max_time_ms: f64 = 60.0; // simulation time limit
     let total_steps = (max_time_ms / dt) as usize;
 
@@ -540,8 +621,20 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     // Stage 3: Flight trajectory
     stage = "flight".to_string();
-    let base_jitter = (wind_disturbance * 2.8) + (1.0 - shape_regularity) * 4.2;
-    let aim_jitter = rng.gen_range(-base_jitter..base_jitter);
+    let mut base_jitter = (wind_disturbance * 2.8) + (1.0 - shape_regularity) * 4.2;
+    let mut fixed_bias = 0.0;
+
+    match weather_protection.as_str() {
+        "pan_shield" => {
+            fixed_bias = 1.0; // 1 degree bias
+        }
+        "operator_cowl" => {
+            base_jitter += 2.5; // increase random range by 2.5 degrees
+        }
+        _ => {}
+    }
+
+    let aim_jitter = fixed_bias + rng.gen_range(-base_jitter..base_jitter);
 
     let target_distance = 35.0;
     let mut flight_x = 0.0;

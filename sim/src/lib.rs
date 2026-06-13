@@ -28,6 +28,7 @@ pub struct ShotInput {
     pub sulfur_ratio: Option<f64>,
     pub charcoal_source: Option<String>,
     pub saltpeter_purity: Option<f64>,
+    pub weather_protection: Option<String>,
 }
 
 pub const STRIDE_COUNT: usize = 20;
@@ -170,6 +171,7 @@ mod tests {
             sulfur_ratio: None,
             charcoal_source: None,
             saltpeter_purity: None,
+            weather_protection: None,
         };
 
         let result = run_simulation(input);
@@ -198,6 +200,7 @@ mod tests {
             sulfur_ratio: None,
             charcoal_source: None,
             saltpeter_purity: None,
+            weather_protection: None,
         };
 
         let result = run_simulation(input);
@@ -225,6 +228,7 @@ mod tests {
             sulfur_ratio: None,
             charcoal_source: None,
             saltpeter_purity: None,
+            weather_protection: None,
         };
         let result_clean = run_simulation(input_clean.clone());
         
@@ -236,6 +240,78 @@ mod tests {
         let peak_v_fouled = result_fouled.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
         
         assert!(peak_v_fouled < peak_v_clean, "Fouling must degrade muzzle velocity via drag!");
+    }
+
+    #[test]
+    fn test_rain_misfire_without_protection() {
+        let mut misfire_count = 0;
+        for i in 0..100 {
+            let input = ShotInput {
+                barrel_material: "cast_bronze".to_string(),
+                propellant_type: "corned".to_string(),
+                refinement_level: 85.0,
+                projectile_type: "lead_ball".to_string(),
+                sealing_quality: "tow".to_string(),
+                weather_humidity: 10.0,
+                weather_wind: 0.0,
+                weather_rain: 95.0, // heavy rain
+                priming_quality: 100.0,
+                seed: 100 + i, // different seeds
+                persistent_fouling: 0.0,
+                propellant_profile: "steady".to_string(),
+                custom_mix_active: None,
+                saltpeter_ratio: None,
+                charcoal_ratio: None,
+                sulfur_ratio: None,
+                charcoal_source: None,
+                saltpeter_purity: None,
+                weather_protection: Some("none".to_string()),
+            };
+
+            let result = run_simulation(input);
+            if result.outcomes.contains(&"misfire_rain".to_string()) {
+                misfire_count += 1;
+            }
+        }
+        assert!(misfire_count >= 40, "Misfire count is {}/100, expected at least 40 in heavy rain without protection", misfire_count);
+    }
+
+    #[test]
+    fn test_parchment_protection_success() {
+        let mut misfire_count = 0;
+        let mut success_count = 0;
+        for i in 0..100 {
+            let input = ShotInput {
+                barrel_material: "cast_bronze".to_string(),
+                propellant_type: "corned".to_string(),
+                refinement_level: 85.0,
+                projectile_type: "lead_ball".to_string(),
+                sealing_quality: "tow".to_string(),
+                weather_humidity: 10.0,
+                weather_wind: 0.0,
+                weather_rain: 95.0, // heavy rain
+                priming_quality: 100.0,
+                seed: 100 + i,
+                persistent_fouling: 0.0,
+                propellant_profile: "steady".to_string(),
+                custom_mix_active: None,
+                saltpeter_ratio: None,
+                charcoal_ratio: None,
+                sulfur_ratio: None,
+                charcoal_source: None,
+                saltpeter_purity: None,
+                weather_protection: Some("parchment".to_string()),
+            };
+
+            let result = run_simulation(input);
+            if result.outcomes.contains(&"misfire_rain".to_string()) {
+                misfire_count += 1;
+            } else {
+                success_count += 1;
+            }
+        }
+        assert!(misfire_count <= 40, "Misfire count is {}/100, expected at most 40 with parchment cover in heavy rain", misfire_count);
+        assert!(success_count >= 60);
     }
 }
 

@@ -2,6 +2,8 @@ import { ShotInput } from '../types';
 
 export class ControlsPanel {
   private onFireCallback: (inputs: ShotInput) => void;
+  private activeConfig: any = null;
+  private isCustomMixActive: boolean = false;
   
   // Cache DOM elements
   private selectBarrel = document.getElementById('select-barrel') as HTMLSelectElement;
@@ -12,6 +14,13 @@ export class ControlsPanel {
   private selectSealing = document.getElementById('select-sealing') as HTMLSelectElement;
   private btnFire = document.getElementById('btn-fire') as HTMLButtonElement;
 
+  private sliderHumidity = document.getElementById('slider-humidity') as HTMLInputElement;
+  private valHumidity = document.getElementById('val-humidity') as HTMLSpanElement;
+  private sliderWind = document.getElementById('slider-wind') as HTMLInputElement;
+  private valWind = document.getElementById('val-wind') as HTMLSpanElement;
+  private sliderRain = document.getElementById('slider-rain') as HTMLInputElement;
+  private valRain = document.getElementById('val-rain') as HTMLSpanElement;
+
   constructor(onFire: (inputs: ShotInput) => void) {
     this.onFireCallback = onFire;
     this.initEventListeners();
@@ -21,6 +30,18 @@ export class ControlsPanel {
     // Sync slider value text readouts
     this.sliderRefinement.addEventListener('input', () => {
       this.valRefinement.textContent = `${this.sliderRefinement.value}%`;
+    });
+
+    this.sliderHumidity.addEventListener('input', () => {
+      this.valHumidity.textContent = `${this.sliderHumidity.value}%`;
+    });
+
+    this.sliderWind.addEventListener('input', () => {
+      this.valWind.textContent = `${this.sliderWind.value}%`;
+    });
+
+    this.sliderRain.addEventListener('input', () => {
+      this.valRain.textContent = `${this.sliderRain.value}%`;
     });
 
     // Handle Fire click
@@ -37,9 +58,9 @@ export class ControlsPanel {
       refinementLevel: parseFloat(this.sliderRefinement.value),
       projectileType: this.selectProjectile.value,
       sealingQuality: this.selectSealing.value,
-      weatherHumidity: 0.0,
-      weatherWind: 0.0,
-      weatherRain: 0.0,
+      weatherHumidity: parseFloat(this.sliderHumidity.value),
+      weatherWind: parseFloat(this.sliderWind.value),
+      weatherRain: parseFloat(this.sliderRain.value),
       primingQuality: 100.0,
       seed: BigInt(Math.floor(Math.random() * 1000000)) as any,
       persistentFouling: 0.0,
@@ -54,6 +75,8 @@ export class ControlsPanel {
   }
 
   public applyEraRestrictions(config: any) {
+    this.activeConfig = config;
+
     // 1. Barrel Material
     this.restrictSelect(this.selectBarrel, config.allowedMetallurgies, config.defaultInputs.barrelMaterial);
     
@@ -90,6 +113,41 @@ export class ControlsPanel {
         info.remove();
       }
     }
+
+    this.updateWeatherLocks();
+  }
+
+  private updateWeatherLocks() {
+    if (!this.activeConfig) return;
+
+    // 6. Weather locks (Option C) - unlock in custom mix (free-play)
+    const hasLocks = this.activeConfig.lockedHumidity !== undefined && !this.isCustomMixActive;
+    [
+      { slider: this.sliderHumidity, valText: this.valHumidity, value: this.activeConfig.lockedHumidity },
+      { slider: this.sliderWind, valText: this.valWind, value: this.activeConfig.lockedWind },
+      { slider: this.sliderRain, valText: this.valRain, value: this.activeConfig.lockedRain }
+    ].forEach(({ slider, valText, value }) => {
+      if (hasLocks && value !== undefined) {
+        slider.disabled = true;
+        slider.value = value.toString();
+        valText.textContent = `${value}%`;
+        
+        const container = slider.closest('.control-group');
+        if (container && !container.querySelector('.control-locked-info')) {
+          const info = document.createElement('span');
+          info.className = 'control-locked-info';
+          container.appendChild(info);
+        }
+        if (container) {
+          const info = container.querySelector('.control-locked-info');
+          if (info) info.textContent = `🜂 Locked for Codex Challenge`;
+        }
+      } else {
+        slider.disabled = false;
+        const container = slider.closest('.control-group');
+        container?.querySelector('.control-locked-info')?.remove();
+      }
+    });
   }
 
   private restrictSelect(select: HTMLSelectElement, allowed: string[], defaultValue: string) {
@@ -146,6 +204,7 @@ export class ControlsPanel {
   }
 
   public setCustomMixActive(active: boolean) {
+    this.isCustomMixActive = active;
     this.selectPropellant.disabled = active;
     this.sliderRefinement.disabled = active;
     
@@ -169,6 +228,8 @@ export class ControlsPanel {
       propContainer?.querySelector('.control-custom-warning')?.remove();
       refContainer?.querySelector('.control-custom-warning')?.remove();
     }
+
+    this.updateWeatherLocks();
   }
 
   public setBarrelMaterial(material: string) {

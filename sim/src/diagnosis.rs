@@ -9,32 +9,37 @@ pub fn generate_result(
     let mut summary = String::new();
 
     // 1. Process Misfires
-    if outcomes.contains(&"misfire".to_string()) {
-        summary = "The touch-hole sparked, but the main charge did not ignite.".to_string();
-        
-        if input.weather_rain > 30.0 {
+    let has_misfire = outcomes.contains(&"misfire".to_string()) 
+        || outcomes.contains(&"misfire_rain".to_string()) 
+        || outcomes.contains(&"misfire_wind".to_string());
+
+    if has_misfire {
+        if outcomes.contains(&"misfire_rain".to_string()) {
+            summary = "The rain soaked the touch-hole priming powder, preventing ignition.".to_string();
             diagnosis.push(DiagnosisEntry {
                 severity: "critical".to_string(),
-                title: "Exposed Priming Washed Out".to_string(),
+                title: "Priming Washed Out".to_string(),
                 explanation: format!(
-                    "Early hand cannons have an exposed top touch-hole. The heavy rain ({:.0}%) soaked the priming powder, extinguishing the spark before it could reach the chamber.",
+                    "Early firearms have exposed priming configurations. Moisture from the rain ({:.0}%) soaked the priming mix, extinguishing the heat before it could reach the chamber. Consider using touch-hole protections like Oiled Parchment or a Pan Cover in wet weather.",
                     input.weather_rain
                 ),
             });
-        } else if input.weather_wind > 50.0 {
+        } else if outcomes.contains(&"misfire_wind".to_string()) {
+            summary = "The wind blew the priming powder away from the touch-hole.".to_string();
             diagnosis.push(DiagnosisEntry {
                 severity: "critical".to_string(),
                 title: "Priming Powder Blown Away".to_string(),
                 explanation: format!(
-                    "With wind speeds of {:.0}%, the loose priming powder sitting on the touch-hole was scattered, causing a failure to ignite.",
+                    "Under high winds ({:.0}%), the loose priming powder sitting on the touch-hole was scattered before the match could ignite it. Using a Pan Shield or Operator Cowl can help block the wind.",
                     input.weather_wind
                 ),
             });
         } else {
+            summary = "The touch-hole sparked, but the main charge did not ignite.".to_string();
             diagnosis.push(DiagnosisEntry {
                 severity: "critical".to_string(),
                 title: "Incomplete Ignition Chain".to_string(),
-                explanation: "The match made contact but humidity or poor grain consistency prevented the fire from transferring down the touch-hole.".to_string(),
+                explanation: "The match made contact, but humidity or poor grain consistency prevented the fire from transferring down the touch-hole. Higher saltpeter refinement or dryer conditions improve ignition reliability.".to_string(),
             });
         }
         

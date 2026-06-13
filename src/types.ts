@@ -4,6 +4,7 @@ export interface AlchemicalMix {
   sulfurRatio: number;    // 0 - 100
   charcoalSource: 'willow' | 'alder' | 'oak';
   saltpeterPurity: number; // 0 - 100
+  weatherProtection?: string;
 }
 
 export interface ShotInput {
@@ -175,6 +176,9 @@ export interface EraConfig {
     nextStep: string;
     challenge: string;
   };
+  lockedHumidity?: number;
+  lockedWind?: number;
+  lockedRain?: number;
 }
 
 export const ERA_REGISTRY: Record<string, EraConfig> = {
@@ -202,7 +206,10 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
       unreliable: 'The raw serpentine mixes burn unevenly and absorb humidity instantly. Bamboo tubes split easily along their natural fibers.',
       nextStep: 'Enclosing the mixture and attaching it to projectile shafts (fire arrows) to deliver fire at a distance.',
       challenge: 'Chronicle Challenge: Achieve a burn duration of at least 8.0 ms (simulated duration) using Bamboo and Uneven Serpentine without causing a fiber split (barrel rupture).'
-    }
+    },
+    lockedHumidity: 30,
+    lockedWind: 0,
+    lockedRain: 0
   },
   fire_delivered: {
     id: 'fire_delivered',
@@ -228,7 +235,10 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
       unreliable: 'Poorly refined saltpeter leads to weak thrust, while damp conditions extinguish the exposed matches entirely.',
       nextStep: 'Packing small debris or pebbles inside the tube to eject a spray of fire and gravel directly from the muzzle.',
       challenge: 'Chronicle Challenge: Reach a muzzle velocity of at least 40 m/s with a Lead Arrow-Bolt from a Bamboo barrel.'
-    }
+    },
+    lockedHumidity: 75,
+    lockedWind: 15,
+    lockedRain: 15
   },
   directional_blast: {
     id: 'directional_blast',
@@ -254,7 +264,10 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
       unreliable: 'Bamboo tubes burn through or split quickly, while rough gravel causes significant inner bore scraping and erratic gas leakage.',
       nextStep: 'Casting thick bronze or welding wrought iron staves to create reusable barrels that can contain high pressure.',
       challenge: 'Chronicle Challenge: Achieve a muzzle velocity of over 30 m/s with Pebble Spray from a Wrought Iron barrel.'
-    }
+    },
+    lockedHumidity: 40,
+    lockedWind: 65,
+    lockedRain: 0
   },
   hand_cannon: {
     id: 'hand_cannon',
@@ -280,7 +293,10 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
       unreliable: 'Corrosion, heavy soot fouling, weld seam failures in iron, and casting voids in bronze make each shot a calculated risk.',
       nextStep: 'Scaling up metallurgical castings to create large, stationary siege artillery firing giant stone spheres.',
       challenge: 'Chronicle Challenge: Fire a Lead Ball from a Cast Bronze barrel achieving >90 m/s muzzle velocity without exceeding the yield strength (deformation).'
-    }
+    },
+    lockedHumidity: 90,
+    lockedWind: 30,
+    lockedRain: 75
   },
   early_cannon: {
     id: 'early_cannon',
@@ -306,6 +322,35 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
       unreliable: 'Casting air bubble voids and extreme peak pressures can lead to catastrophic explosions, destroying the cannon and crew.',
       nextStep: 'Standardizing gunpowder formulas (corned powder) and developing wheeled gun carriages for field battles.',
       challenge: 'Chronicle Challenge: Achieve a muzzle velocity of at least 110 m/s with a heavy Rough Stone projectile using a Clay wadding plug.'
+    },
+    lockedHumidity: 85,
+    lockedWind: 60,
+    lockedRain: 45
+  },
+  sandbox: {
+    id: 'sandbox',
+    name: 'VI. Sandbox Playground',
+    displayName: 'Sandbox Playground',
+    dateRange: 'Free Play',
+    allowedMetallurgies: ['bamboo', 'wrought_iron', 'cast_bronze'],
+    allowedPropellants: ['uneven', 'fast_then_weak', 'steady', 'slow_smoky', 'damp_partial'],
+    maxSaltpeterRefinement: 100,
+    allowedProjectiles: ['none', 'lead_arrow', 'pebbles', 'rough_stone', 'lead_ball'],
+    allowedWaddings: ['none', 'tow', 'clay'],
+    defaultInputs: {
+      barrelMaterial: 'cast_bronze',
+      propellantProfile: 'steady',
+      refinementLevel: 85,
+      projectileType: 'lead_ball',
+      sealingQuality: 'tow',
+    },
+    codex: {
+      illustration: '🜔 🜕 🝓 🝛',
+      description: 'Welcome to the Sandbox Playground. Here, all historical restrictions are lifted. You can pair any barrel metallurgy, projectile, wadding, or propellant mix, and dynamically control the weather conditions without restrictions.',
+      objective: 'Experiment freely with physical tolerances, propellant velocities, and environmental protections.',
+      unreliable: 'No safety rails—watch out for bamboo bursts or wet misfires.',
+      nextStep: 'Select your apparatus and ignite.',
+      challenge: 'Sandbox Mode: All features and environmental conditions are unlocked.'
     }
   }
 };
