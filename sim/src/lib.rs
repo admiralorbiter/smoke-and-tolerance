@@ -20,6 +20,14 @@ pub struct ShotInput {
     pub seed: u64,
     pub persistent_fouling: f64,    // 0-1
     pub propellant_profile: String, // "uneven", "fast_then_weak", "steady", "slow_smoky", "damp_partial"
+    
+    // Custom alchemical mix options
+    pub custom_mix_active: Option<bool>,
+    pub saltpeter_ratio: Option<f64>,
+    pub charcoal_ratio: Option<f64>,
+    pub sulfur_ratio: Option<f64>,
+    pub charcoal_source: Option<String>,
+    pub saltpeter_purity: Option<f64>,
 }
 
 pub const STRIDE_COUNT: usize = 20;
@@ -156,6 +164,12 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
         };
 
         let result = run_simulation(input);
@@ -178,6 +192,12 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
         };
 
         let result = run_simulation(input);
@@ -199,6 +219,12 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
         };
         let result_clean = run_simulation(input_clean.clone());
         
@@ -212,3 +238,4 @@ mod tests {
         assert!(peak_v_fouled < peak_v_clean, "Fouling must degrade muzzle velocity via drag!");
     }
 }
+

@@ -129,7 +129,28 @@ Where:
 *   $m_{soot\_fouling}$: Heavy solid ash residue adhering to the bore.
 *   $m_{smoke\_ejected}$: Suspended carbon soot particles ejected into the air.
 
+### 7. Custom Alchemical Formulation Mixer (Stoichiometry Overrides)
+When the user locks in a custom batch, the standard propellant profiles are overridden in the Rust integrator using barycentric composition coordinates for Saltpeter ($S_p$), Charcoal ($C_c$), and Sulfur ($S_s$) summing to 100%:
+
+*   **Burn Rate Multiplier ($M_{burn}$):**
+    $$M_{burn} = M_{wood} \cdot P_{salt} \cdot S_{burn}$$
+    Where $M_{wood}$ is the wood source scaling (Willow: 1.35, Alder: 1.0, Oak: 0.65), $P_{salt}$ is the Saltpeter purity fraction, and $S_{burn}$ scales with the absolute deviation ($\text{dev}$) from the ideal 75% / 15% / 10% ratio:
+    $$S_{burn} = \max\left(0.15, 1.0 - 1.5 \cdot \text{dev}\right)$$
+    *Note: If $S_p > 85\%$ or $S_p < 50\%$, $S_{burn}$ is further penalized due to oxygen imbalance.*
+
+*   **Chemical Gas Yield ($Y_{gas}$):**
+    $$Y_{gas} = 0.45 \cdot \min\left(1.0, \frac{S_p}{0.75}\right) \cdot \min\left(1.0, \frac{C_c}{0.15}\right) \cdot \max\left(0.2, 1.0 - 0.5 \cdot \text{dev}\right)$$
+
+*   **Ignition Temperature ($T_{ignition}$):**
+    $$T_{ignition} = \left[ 2400 \cdot \text{clamp}\left(0.5, 1.15, \frac{S_p}{0.75}\right) \cdot \max\left(0.3, 1.0 - 0.4 \cdot \text{dev}\right) \right] \cdot \left(1.0 - H_{hum} \cdot 0.15\right)$$
+    Where $H_{hum}$ is the normalized ambient weather humidity.
+
+*   **Soot Residue Fraction ($F_{soot}$):**
+    $$F_{soot} = \text{clamp}\left(0.05, 0.60, 0.15 \cdot \frac{C_c}{0.15} \cdot W_{soot}\right)$$
+    Where $W_{soot}$ is the wood soot factor (Willow: 0.4, Alder: 1.0, Oak: 2.0).
+
 ---
+
 
 ## 🜔 WASM Shared Memory Layout
 

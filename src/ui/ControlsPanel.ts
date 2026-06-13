@@ -144,4 +144,36 @@ export class ControlsPanel {
     };
     return map[key] || key;
   }
+
+  public setCustomMixActive(active: boolean) {
+    this.selectPropellant.disabled = active;
+    this.sliderRefinement.disabled = active;
+    
+    const propContainer = this.selectPropellant.closest('.control-group');
+    const refContainer = this.sliderRefinement.closest('.control-group');
+
+    if (active) {
+      if (propContainer && !propContainer.querySelector('.control-custom-warning')) {
+        const warn = document.createElement('span');
+        warn.className = 'control-custom-warning';
+        warn.textContent = '🧪 Custom alchemical mix active';
+        propContainer.appendChild(warn);
+      }
+      if (refContainer && !refContainer.querySelector('.control-custom-warning')) {
+        const warn = document.createElement('span');
+        warn.className = 'control-custom-warning';
+        warn.textContent = '🧪 Custom alchemical mix active';
+        refContainer.appendChild(warn);
+      }
+    } else {
+      propContainer?.querySelector('.control-custom-warning')?.remove();
+      refContainer?.querySelector('.control-custom-warning')?.remove();
+    }
+  }
+
+  public setBarrelMaterial(material: string) {
+    this.selectBarrel.value = material;
+    this.selectBarrel.dispatchEvent(new Event('change'));
+  }
 }
+

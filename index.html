@@ -369,6 +369,14 @@
           </div>
         </div>
 
+        <!-- Active custom batch indicator -->
+        <div id="custom-batch-indicator" class="custom-batch-banner" style="display: none;">
+          <span>🧪 Custom Lab Batch Active</span>
+          <button id="btn-reset-batch" class="btn-reset-reset" title="Reset to standard era batch">✕ Reset</button>
+        </div>
+
+        <!-- Alchemical Workbench Toggle Button -->
+        <button id="btn-open-lab" class="workbench-btn">🧪 ALCHEMICAL WORKBENCH</button>
         <button id="btn-fire" class="fire-btn">🔥 FIRE TEST SHOT</button>
       </div>
 
@@ -402,6 +410,215 @@
   <footer>
     <p>&copy; 2026 Smoke & Tolerance. An educational medieval physics project.</p>
   </footer>
+
+  <!-- Alchemical Synthesis Lab Full-Screen Overlay -->
+  <div id="alchemical-lab-overlay" class="lab-overlay" style="display: none;">
+    <div class="lab-overlay-content">
+      <header class="lab-header">
+        <div class="lab-header-title-block">
+          <h2>🜁 Alchemical Synthesis Laboratory</h2>
+          <p class="lab-subtitle">Experiment with Tria Prima proportions, charcoal sources, saltpeter purification, and structural coupon testing.</p>
+        </div>
+        <button id="btn-close-lab" class="lab-close-btn" title="Close Workbench">✕</button>
+      </header>
+
+      <!-- Workbench Tabs Navigation -->
+      <nav class="lab-tabs">
+        <button class="lab-tab-btn active" data-tab="synthesis">🧪 Propellant Synthesis</button>
+        <button class="lab-tab-btn" data-tab="combustion">💥 Combustion Testing</button>
+        <button class="lab-tab-btn" data-tab="metallurgy">🔩 Metallurgical Testing</button>
+      </nav>
+
+      <main class="lab-workspace">
+        <!-- Tab 1: Synthesis -->
+        <section id="lab-tab-synthesis" class="lab-tab-panel active">
+          <div class="lab-grid-2col">
+            <!-- Left Side: Ratios -->
+            <div class="lab-card">
+              <h3>fig A. Tria Prima Barycentric Mixer</h3>
+              <p class="card-instruction">Click and drag inside the ternary triangle to mix Nitrum, Sulphur, and Carbo ratios.</p>
+              <div class="ternary-mixer-container">
+                <svg id="svg-lab-ternary" viewBox="0 0 160 140" width="100%" height="100%">
+                  <!-- Triangle Base -->
+                  <polygon points="80,15 20,120 140,120" class="ternary-triangle" />
+                  <!-- Apex Labels -->
+                  <text x="80" y="8" class="svg-label" text-anchor="middle">🜔 Nitrum (Saltpeter)</text>
+                  <text x="10" y="132" class="svg-label" text-anchor="start">🜍 Sulphur</text>
+                  <text x="150" y="132" class="svg-label" text-anchor="end">🜘 Carbo (Charcoal)</text>
+                  <!-- Current mixture crosshair -->
+                  <circle id="lab-ternary-marker" cx="80" cy="95" r="6" class="ternary-marker" />
+                </svg>
+              </div>
+              <div class="ratio-readouts">
+                <div class="readout-box saltpeter-box">
+                  <span class="label">🜔 Nitrum</span>
+                  <span id="readout-saltpeter" class="value">75.0%</span>
+                </div>
+                <div class="readout-box sulfur-box">
+                  <span class="label">🜍 Sulphur</span>
+                  <span id="readout-sulfur" class="value">10.0%</span>
+                </div>
+                <div class="readout-box charcoal-box">
+                  <span class="label">🜘 Carbo</span>
+                  <span id="readout-charcoal" class="value">15.0%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Ingredient Selection & Purification -->
+            <div class="lab-card">
+              <h3>fig B. Sourcing & Purification</h3>
+              <!-- Charcoal Selector -->
+              <div class="lab-form-group">
+                <label>🜘 Charcoal Source (Carbo)</label>
+                <div class="charcoal-cards">
+                  <div class="charcoal-card active" data-source="willow">
+                    <span class="title">Willow Wood</span>
+                    <span class="description">Fast flash rate. Extremely low ash, ideal for rapid combustion.</span>
+                  </div>
+                  <div class="charcoal-card" data-source="alder">
+                    <span class="title">Alder Wood</span>
+                    <span class="description">Moderate, reliable rate. Standard ash residue.</span>
+                  </div>
+                  <div class="charcoal-card" data-source="oak">
+                    <span class="title">Oak Wood</span>
+                    <span class="description">Slow, smoldering burn. Leaves thick, oily soot residue.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Saltpeter Crystallizer -->
+              <div class="lab-form-group" style="margin-top: 1.5rem;">
+                <label>🜔 Saltpeter Purification (Nitrum)</label>
+                <p class="card-instruction">Recrystallize to remove sodium/calcium contaminants and raise combustion temperatures.</p>
+                <div class="crystallization-widget">
+                  <div class="crystallization-progress-container">
+                    <div id="crystallization-bar" class="crystallization-bar" style="width: 50%;"></div>
+                    <span id="crystallization-text" class="progress-text">50% Purity (1 Cycle)</span>
+                  </div>
+                  <button id="btn-crystallize" class="crystallize-btn">🝖 RE-CRYSTALLIZE</button>
+                </div>
+                <div class="crystallizer-animation-container">
+                  <svg id="svg-crystallizer" viewBox="0 0 160 80" class="crystallizer-svg">
+                    <!-- Dynamic crystals will be drawn here -->
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Combustion -->
+        <section id="lab-tab-combustion" class="lab-tab-panel">
+          <div class="lab-grid-2col">
+            <!-- Open Dish Burn Test -->
+            <div class="lab-card">
+              <h3>fig C. Open-Dish Combustion Test</h3>
+              <p class="card-instruction">Ignite a small 1-gram sample in the open air to evaluate combustion velocity and ash leftover.</p>
+              <div class="tester-canvas-container">
+                <canvas id="canvas-dish-burn" width="400" height="180" style="display: block; width: 100%; height: auto;"></canvas>
+              </div>
+              <div class="test-controls">
+                <button id="btn-test-burn" class="test-btn">🔥 IGNITE DISH SAMPLE</button>
+                <div class="test-readout">
+                  <span>Velocity: <strong id="readout-burn-velocity">-</strong></span>
+                  <span>Smoke: <strong id="readout-burn-smoke">-</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Closed Calorimeter -->
+            <div class="lab-card">
+              <h3>fig D. Bomb Calorimeter Crucible</h3>
+              <p class="card-instruction">Measure absolute pressure development and thermodynamic heat release in a sealed vessel.</p>
+              <div class="calorimeter-panel">
+                <div class="calorimeter-gauges">
+                  <div class="gauge-box">
+                    <span class="label">Peak Pressure</span>
+                    <span id="gauge-pressure" class="gauge-value">0.0 MPa</span>
+                  </div>
+                  <div class="gauge-box">
+                    <span class="label">Reaction Temp</span>
+                    <span id="gauge-temp" class="gauge-value">293.1 K</span>
+                  </div>
+                </div>
+                <div class="calorimeter-chart-container">
+                  <svg id="svg-calorimeter-chart" viewBox="0 0 240 100" class="calorimeter-chart">
+                    <!-- Grid Lines -->
+                    <line x1="20" y1="90" x2="230" y2="90" stroke="#2b241e" stroke-width="0.75" />
+                    <line x1="20" y1="10" x2="20" y2="90" stroke="#2b241e" stroke-width="0.75" />
+                    <!-- Pressure/Temp plot paths -->
+                    <path id="path-cal-pressure" class="chart-path pressure-path" d="" fill="none" stroke="#d94e34" stroke-width="1.5" />
+                    <path id="path-cal-temp" class="chart-path temp-path" d="" fill="none" stroke="#ffb703" stroke-width="1.5" />
+                  </svg>
+                </div>
+              </div>
+              <div class="test-controls">
+                <button id="btn-test-calorimeter" class="test-btn">🝚 TRIGGER CALORIMETER</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 3: Metallurgy -->
+        <section id="lab-tab-metallurgy" class="lab-tab-panel">
+          <div class="lab-grid-2col">
+            <!-- Pulling Coupon Machine -->
+            <div class="lab-card">
+              <h3>fig E. Tensile Coupon Testing Machine</h3>
+              <p class="card-instruction">Select a material, then click and drag the lever slider to stretch and break the specimen.</p>
+              <div class="tensile-layout">
+                <div class="tensile-selectors">
+                  <button class="material-coupon-btn active" data-material="bamboo">Bamboo fiber</button>
+                  <button class="material-coupon-btn" data-material="wrought_iron">Wrought Iron coupon</button>
+                  <button class="material-coupon-btn" data-material="cast_bronze">Cast Bronze rod</button>
+                </div>
+                <div class="tester-canvas-container tensile-canvas-container">
+                  <canvas id="canvas-tensile" width="360" height="200" style="display: block; width: 100%; height: auto;"></canvas>
+                  <!-- Drag-pulling lever overlay -->
+                  <div class="tensile-lever-control">
+                    <label for="slider-tensile-lever">Lever Tension Load</label>
+                    <input type="range" id="slider-tensile-lever" min="0" max="100" value="0" style="width: 100%;">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stress-Strain Chart -->
+            <div class="lab-card">
+              <h3>fig F. Stress-Strain Telemetry Chart (σ - ε)</h3>
+              <p class="card-instruction">Analyze plastic deformation, yield point, and ultimate fracture stress parameters.</p>
+              <div class="tensile-chart-panel">
+                <div class="tensile-chart-container">
+                  <svg id="svg-tensile-chart" viewBox="0 0 240 160" class="tensile-chart">
+                    <!-- Grid markers -->
+                    <line x1="20" y1="140" x2="230" y2="140" stroke="#2b241e" stroke-width="1" />
+                    <line x1="20" y1="10" x2="20" y2="140" stroke="#2b241e" stroke-width="1" />
+                    <!-- Stress strain curve -->
+                    <path id="path-tensile-curve" class="chart-path tensile-path" d="" fill="none" stroke="#d94e34" stroke-width="2" />
+                    <circle id="marker-tensile-current" cx="20" cy="140" r="4" fill="#ff9f1c" opacity="0" />
+                  </svg>
+                </div>
+                <div class="tensile-readouts">
+                  <div>Current Stress (σ): <span id="readout-tensile-load" class="monospace-stat">0.0 MPa</span></div>
+                  <div>Yield Limit: <span id="readout-tensile-yield" class="monospace-stat">30.0 MPa</span></div>
+                  <div>Ultimate Limit: <span id="readout-tensile-ultimate" class="monospace-stat">45.0 MPa</span></div>
+                  <div>Status: <strong id="readout-tensile-status" style="color: #6e5e4f;">UNLOADED</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="lab-footer">
+        <div class="applied-recipe-summary">
+          <span>Synthesized Propellant: <strong id="lbl-active-mix">75% Nitrum / 15% Carbo / 10% Sulphur (Alder Wood)</strong></span>
+        </div>
+        <button id="btn-lock-batch" class="lock-batch-btn">🜔 LOCK BATCH & APPLY METALLURGY</button>
+      </footer>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

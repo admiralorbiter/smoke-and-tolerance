@@ -1,3 +1,11 @@
+export interface AlchemicalMix {
+  saltpeterRatio: number; // 0 - 100
+  charcoalRatio: number;  // 0 - 100
+  sulfurRatio: number;    // 0 - 100
+  charcoalSource: 'willow' | 'alder' | 'oak';
+  saltpeterPurity: number; // 0 - 100
+}
+
 export interface ShotInput {
   barrelMaterial: string;
   propellantType: string;
@@ -12,6 +20,8 @@ export interface ShotInput {
   weatherProtection?: string;
   persistentFouling: number;
   propellantProfile: string;
+  customMixActive?: boolean;
+  alchemicalMix?: AlchemicalMix;
 }
 
 export const FRAME_STRIDE = 20;

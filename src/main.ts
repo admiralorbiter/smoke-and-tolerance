@@ -1,8 +1,9 @@
-import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY } from './types';
+import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY, AlchemicalMix } from './types';
 import { CutawayRenderer } from './render/CutawayRenderer';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { Timeline } from './ui/Timeline';
 import { ComparisonPanel } from './ui/ComparisonPanel';
+import { AlchemicalLabOverlay } from './ui/AlchemicalLabOverlay';
 
 class LaboratoryApp {
   private renderer!: CutawayRenderer;
@@ -10,6 +11,7 @@ class LaboratoryApp {
   private timeline!: Timeline;
   private worker!: Worker;
   private comparisonPanel!: ComparisonPanel;
+  private labOverlay!: AlchemicalLabOverlay;
 
   private currentInputs: ShotInput | null = null;
   private shotHistory: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = [];
@@ -19,8 +21,18 @@ class LaboratoryApp {
   private persistentFouling: number = 0.0;
   private activeEra: string = 'hand_cannon';
 
+  private customMixActive: boolean = false;
+  private customAlchemicalMix: AlchemicalMix = {
+    saltpeterRatio: 75.0,
+    charcoalRatio: 15.0,
+    sulfurRatio: 10.0,
+    charcoalSource: 'alder',
+    saltpeterPurity: 50.0,
+  };
+
   private lastRenderedFrameIndex: number = 0;
   private lastRenderedFrames: any[] = [];
+
 
   constructor() {
     this.initApp();
@@ -102,6 +114,22 @@ class LaboratoryApp {
       this.handleFireShot(inputs);
     });
 
+    // Instantiate Alchemical Synthesis Lab
+    this.labOverlay = new AlchemicalLabOverlay((mix, material) => {
+      this.customMixActive = true;
+      this.customAlchemicalMix = { ...mix };
+      this.controls.setCustomMixActive(true);
+      this.controls.setBarrelMaterial(material);
+      
+      const banner = document.getElementById('custom-batch-indicator');
+      if (banner) banner.style.display = 'flex';
+      
+      this.shotHistory = [];
+      this.comparisonPanel.hide();
+      
+      this.handleFireShot(this.controls.getInputs());
+    });
+
     this.timeline = new Timeline(
       (frame, index, frames) => {
         this.lastRenderedFrameIndex = index;
@@ -156,6 +184,18 @@ class LaboratoryApp {
       });
     });
 
+    // 5. Alchemical Workbench Toggle Listeners
+    const btnOpenLab = document.getElementById('btn-open-lab');
+    btnOpenLab?.addEventListener('click', () => {
+      this.labOverlay.show(this.customAlchemicalMix, this.controls.getInputs().barrelMaterial);
+    });
+
+    const btnResetBatch = document.getElementById('btn-reset-batch');
+    btnResetBatch?.addEventListener('click', () => {
+      this.resetCustomBatch();
+    });
+
+
     // Initialize with hand_cannon defaults
     this.activeEra = 'hand_cannon';
     const activeConfig = ERA_REGISTRY[this.activeEra];
@@ -207,6 +247,10 @@ class LaboratoryApp {
     const initialInputs = this.controls.getInputs();
     initialInputs.primingQuality = 100.0;
     initialInputs.persistentFouling = this.persistentFouling;
+    if (this.customMixActive) {
+      initialInputs.customMixActive = true;
+      initialInputs.alchemicalMix = this.customAlchemicalMix;
+    }
     this.currentInputs = initialInputs;
     this.worker.postMessage({ input: initialInputs });
   }
@@ -224,11 +268,29 @@ class LaboratoryApp {
 
     this.hasFiredShot = true;
     inputs.persistentFouling = this.persistentFouling;
+    if (this.customMixActive) {
+      inputs.customMixActive = true;
+      inputs.alchemicalMix = this.customAlchemicalMix;
+    }
     this.currentInputs = inputs;
     this.controls.setFiringState(true);
     inputs.primingQuality = 100.0;
     this.worker.postMessage({ input: inputs });
   }
+
+  private resetCustomBatch() {
+    this.customMixActive = false;
+    this.controls.setCustomMixActive(false);
+    
+    const banner = document.getElementById('custom-batch-indicator');
+    if (banner) banner.style.display = 'none';
+    
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+    
+    this.handleFireShot(this.controls.getInputs());
+  }
+
 
   private updateDiagnosisPanel(result: ShotResultWasm) {
     const summaryEl = document.getElementById('diag-summary') as HTMLDivElement;
@@ -261,10 +323,16 @@ class LaboratoryApp {
   }
 
   private updateChemistryDashboard(frame: any, inputs: ShotInput) {
-    const saltpeter = inputs.refinementLevel;
-    const remaining = 100 - saltpeter;
-    const charcoal = remaining * 0.6;
-    const sulfur = remaining * 0.4;
+    let saltpeter = inputs.refinementLevel;
+    let charcoal = (100 - saltpeter) * 0.6;
+    let sulfur = (100 - saltpeter) * 0.4;
+
+    if (inputs.customMixActive && inputs.alchemicalMix) {
+      saltpeter = inputs.alchemicalMix.saltpeterRatio;
+      charcoal = inputs.alchemicalMix.charcoalRatio;
+      sulfur = inputs.alchemicalMix.sulfurRatio;
+    }
+
 
     // 1. Tria Prima Plot
     const marker = document.getElementById('marker-tria-prima');
@@ -669,6 +737,14 @@ class LaboratoryApp {
       btn.classList.toggle('active', btn.getAttribute('data-era') === eraId);
     });
 
+    // Reset custom alchemical batch on Era switch
+    if (this.customMixActive) {
+      this.customMixActive = false;
+      this.controls.setCustomMixActive(false);
+      const banner = document.getElementById('custom-batch-indicator');
+      if (banner) banner.style.display = 'none';
+    }
+
     // Apply setting locks
     const config = ERA_REGISTRY[eraId];
     this.controls.applyEraRestrictions(config);
@@ -687,6 +763,7 @@ class LaboratoryApp {
     this.isEraSwitchLoad = true;
     this.handleInitialState();
   }
+
 
   private updateCodexPanel(config: any) {
     const title = document.getElementById('codex-title');

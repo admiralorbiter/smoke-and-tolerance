@@ -47,14 +47,70 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let wind_disturbance = input.weather_wind / 100.0;
     let humidity_slowdown = input.weather_humidity / 100.0;
 
-    // Propellant consistency & burn profiles
-    let (burn_profile_code, is_corned, initial_grain_r, burn_rate_mult, initial_gas_yield, is_damp) = match input.propellant_profile.as_str() {
+    // Propellant consistency & burn profiles (made mutable for custom mix overrides)
+    let (mut burn_profile_code, mut is_corned, mut initial_grain_r, mut burn_rate_mult, mut initial_gas_yield, is_damp) = match input.propellant_profile.as_str() {
         "uneven" => (0.0, false, 0.0, 1.0, 0.45, false),
         "fast_then_weak" => (1.0, true, 0.0006, 1.5, 0.45, false),
         "steady" => (2.0, true, 0.0012, 1.0, 0.45, false),
         "slow_smoky" => (3.0, false, 0.0, 0.5, 0.31, false),
         "damp_partial" | _ => (4.0, false, 0.0, 0.2, 0.225, true),
     };
+
+    let custom_mix_active = input.custom_mix_active.unwrap_or(false);
+    let saltpeter_ratio = input.saltpeter_ratio.unwrap_or(75.0) / 100.0;
+    let charcoal_ratio = input.charcoal_ratio.unwrap_or(15.0) / 100.0;
+    let sulfur_ratio = input.sulfur_ratio.unwrap_or(10.0) / 100.0;
+    let saltpeter_purity = input.saltpeter_purity.unwrap_or(100.0) / 100.0;
+    let charcoal_source = input.charcoal_source.clone().unwrap_or("alder".to_string());
+
+    // Chemistry reaction kinetics parameters
+    let mut temp_ignition = 2400.0 * (1.0 - humidity_slowdown * 0.15); // Peak temp in K
+
+    if custom_mix_active {
+        burn_profile_code = 5.0; // Custom alchemical code
+        is_corned = input.propellant_profile == "steady" || input.propellant_profile == "fast_then_weak";
+        initial_grain_r = if is_corned { 0.0012 } else { 0.0 };
+
+        // Base charcoal source modifier
+        let wood_mult = match charcoal_source.as_str() {
+            "willow" => 1.35,
+            "alder" => 1.0,
+            "oak" | _ => 0.65,
+        };
+        
+        // Stoichiometric deviation from 75/15/10
+        let dev = (saltpeter_ratio - 0.75).abs() + (charcoal_ratio - 0.15).abs() + (sulfur_ratio - 0.10).abs();
+        
+        // Stoichiometry factor for burning speed
+        let mut stoichiometry_burn = (1.0 - dev * 1.5).max(0.15);
+        if saltpeter_ratio > 0.85 {
+            stoichiometry_burn *= (1.0 - (saltpeter_ratio - 0.85) * 6.0).max(0.1);
+        } else if saltpeter_ratio < 0.50 {
+            stoichiometry_burn *= (saltpeter_ratio / 0.50).max(0.1);
+        }
+
+        burn_rate_mult = wood_mult * saltpeter_purity * stoichiometry_burn;
+        // Apply profile multipliers
+        if input.propellant_profile == "fast_then_weak" {
+            burn_rate_mult *= 1.5;
+        } else if input.propellant_profile == "slow_smoky" {
+            burn_rate_mult *= 0.5;
+        } else if input.propellant_profile == "damp_partial" {
+            burn_rate_mult *= 0.2;
+        }
+
+        // Gas yield
+        initial_gas_yield = 0.45 * (saltpeter_ratio / 0.75).min(1.0) * (charcoal_ratio / 0.15).min(1.0) * (1.0 - dev * 0.5).max(0.2);
+        if input.propellant_profile == "slow_smoky" {
+            initial_gas_yield *= 0.7;
+        } else if input.propellant_profile == "damp_partial" {
+            initial_gas_yield *= 0.5;
+        }
+
+        // Temperature
+        let base_temp = 2400.0 * (saltpeter_ratio / 0.75).clamp(0.5, 1.15) * (1.0 - dev * 0.4).max(0.3);
+        temp_ignition = base_temp * (1.0 - humidity_slowdown * 0.15);
+    }
 
     let propellant_mass: f64 = 0.015; // 15 grams propellant charge
     let grain_density: f64 = 1700.0; // kg/m^3
@@ -91,8 +147,6 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     };
     let mut accumulated_heat_loss = 0.0;
 
-    // Chemistry reaction kinetics parameters
-    let temp_ignition = 2400.0 * (1.0 - humidity_slowdown * 0.15); // Peak temp in K
     let mut unburned_mass: f64 = propellant_mass;
     let mut gas_mass: f64 = 0.0;
     let mut total_gas_leaked: f64 = 0.0;
@@ -256,7 +310,16 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             gas_mass += gas_generated;
 
             // Soot & smoke residues
-            let soot_fraction = if burn_profile_code == 3.0 || burn_profile_code == 4.0 { 0.30 } else { 0.15 };
+            let soot_fraction = if custom_mix_active {
+                let wood_soot_mult = match charcoal_source.as_str() {
+                    "willow" => 0.4,
+                    "alder" => 1.0,
+                    "oak" | _ => 2.0,
+                };
+                (0.15 * (charcoal_ratio / 0.15) * wood_soot_mult).clamp(0.05, 0.60)
+            } else {
+                if burn_profile_code == 3.0 || burn_profile_code == 4.0 { 0.30 } else { 0.15 }
+            };
             let residue_generated = burned_in_step * (1.0 - gas_yield_factor);
             let step_soot = residue_generated * soot_fraction;
             let step_smoke = residue_generated * (1.0 - soot_fraction);
@@ -376,6 +439,10 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
             if windage_leak > 0.00001 {
                 step_warnings.push("Gas blowing past projectile".to_string());
+            }
+
+            if custom_mix_active && sulfur_ratio > 0.15 {
+                step_warnings.push("High sulfur acidic fouling".to_string());
             }
 
             let fouling_index_now = (input.persistent_fouling + (total_soot_fouling / 0.015)).min(1.0);
