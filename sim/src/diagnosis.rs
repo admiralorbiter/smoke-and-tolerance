@@ -110,26 +110,35 @@ pub fn generate_result(
 
     // 3. Process Stuck Projectile
     if outcomes.contains(&"stuck_projectile".to_string()) {
-        summary = "The projectile failed to leave the barrel.".to_string();
-        
-        if input.sealing_quality == "clay" {
+        if input.projectile_type == "none" {
+            summary = "The incendiary packet burned completely inside the tube.".to_string();
             diagnosis.push(DiagnosisEntry {
-                severity: "critical".to_string(),
-                title: "Clay Jammed in Bore".to_string(),
-                explanation: "The clay plug wadding baked or jammed inside the barrel, creating a resistance too high for the weak gas pressure to overcome.".to_string(),
-            });
-        } else if input.weather_humidity > 60.0 && input.propellant_type == "meal" {
-            diagnosis.push(DiagnosisEntry {
-                severity: "critical".to_string(),
-                title: "Sluggish Damp Burn".to_string(),
-                explanation: "The combination of meal powder and high humidity resulted in a slow, weak combustion. The pressure failed to reach the static friction threshold required to launch the heavy projectile.".to_string(),
+                severity: "info".to_string(),
+                title: "Open Burn Combustion".to_string(),
+                explanation: "Without a projectile to seal the bore, pressure could not build up. The propellant burned as a slow, smoky alchemical flame venting directly into the open air.".to_string(),
             });
         } else {
-            diagnosis.push(DiagnosisEntry {
-                severity: "critical".to_string(),
-                title: "Insufficent Propulsion".to_string(),
-                explanation: "Gas leaked too quickly around the loose-fitting projectile, collapsing the pressure before it could push the mass out of the bore.".to_string(),
-            });
+            summary = "The projectile failed to leave the barrel.".to_string();
+            
+            if input.sealing_quality == "clay" {
+                diagnosis.push(DiagnosisEntry {
+                    severity: "critical".to_string(),
+                    title: "Clay Jammed in Bore".to_string(),
+                    explanation: "The clay plug wadding baked or jammed inside the barrel, creating a resistance too high for the weak gas pressure to overcome.".to_string(),
+                });
+            } else if input.weather_humidity > 60.0 && input.propellant_type == "meal" {
+                diagnosis.push(DiagnosisEntry {
+                    severity: "critical".to_string(),
+                    title: "Sluggish Damp Burn".to_string(),
+                    explanation: "The combination of meal powder and high humidity resulted in a slow, weak combustion. The pressure failed to reach the static friction threshold required to launch the heavy projectile.".to_string(),
+                });
+            } else {
+                diagnosis.push(DiagnosisEntry {
+                    severity: "critical".to_string(),
+                    title: "Insufficent Propulsion".to_string(),
+                    explanation: "Gas leaked too quickly around the loose-fitting projectile, collapsing the pressure before it could push the mass out of the bore.".to_string(),
+                });
+            }
         }
 
         return ShotResult {

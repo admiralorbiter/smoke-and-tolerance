@@ -19,12 +19,13 @@ Rather than treating early firearms as finished weapons, this game explores them
 
 ## Core Loop
 
-1.  **Configure the Lab:** Choose barrel materials, powder processing methods, projectile types, wadding seals, and weather variables.
-2.  **Fire a Test Shot:** Run the physics-integrated Rust simulator.
-3.  **Inspect the Cutaway:** Watch the 2D cutaway animation showing pressure glows, stress coloration, and gas leakage streams.
-4.  **Scrub the Timeline:** Step frame-by-frame through ignition, pressure buildup, projectile movement, muzzle flash, and flight ballistics.
-5.  **Examine the Alchemical Ledger:** Toggle between **Instruments** (a Tria Prima ternary marker, Roman caloric pyrometer, and distillation alembic), **Ledger** (a conservation-of-mass balance table), and **Telemetry Charts** (interactive pressure, temperature, and mass plots synced with the timeline scrub).
-6.  **Read the Diagnosis:** Learn from post-shot analysis cards describing the historical causes of misfires, jams, and ruptures.
+1.  **Select an Era:** Navigate the timeline bar at the top of the interface to choose a historical era from the 800s to the 1300s. Open the **Codex** tab to read the historical challenges, alchemical constraints, and progression milestones.
+2.  **Configure the Lab:** Experiment with metallurgical barrel types, waddings, projectile types, and propellant profiles (restricted to historically authentic selections based on the active era).
+3.  **Fire a Test Shot:** Run the physics-integrated Rust simulator.
+4.  **Inspect the Cutaway:** Watch the 2D cutaway animation showing pressure glows, stress coloration, and gas leakage streams (or open-air combustion packet venting).
+5.  **Scrub the Timeline:** Step frame-by-frame through ignition, pressure buildup, projectile movement, muzzle flash, and flight ballistics.
+6.  **Examine the Alchemical Ledger:** Toggle between **Instruments** (a Tria Prima ternary marker, Roman caloric pyrometer, and distillation alembic), **Ledger** (a conservation-of-mass balance table), and **Telemetry Charts** (interactive pressure, temperature, and mass plots synced with the timeline scrub).
+7.  **Read the Diagnosis:** Learn from post-shot analysis cards describing the historical causes of misfires, jams, and ruptures.
 
 ---
 

@@ -418,33 +418,55 @@ export class CutawayRenderer {
 
     if (frame.stage === 'ignition' || frame.stage === 'pressure' || frame.stage === 'movement') {
       const projPosPx = barrelLeft + (frame.projectileX * barrelLengthPx);
+      const fireEndPx = projectileType === 'none' ? (barrelLeft + barrelLengthPx) : projPosPx;
 
       if (pressureGlow > 0.05) {
-        // Red/Orange fire gas glow behind projectile
-        let grad = ctx.createLinearGradient(barrelLeft, centerY, projPosPx, centerY);
+        // Red/Orange fire gas glow behind projectile (or all the way out for none)
+        let grad = ctx.createLinearGradient(barrelLeft, centerY, fireEndPx, centerY);
         grad.addColorStop(0, '#ff9f1c');
         grad.addColorStop(0.5, '#d94e34');
         grad.addColorStop(1, `rgba(158, 42, 43, ${pressureGlow})`);
         ctx.fillStyle = grad;
-        ctx.fillRect(barrelLeft, centerY - boreRadiusPx, projPosPx - barrelLeft, boreRadiusPx * 2);
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx, fireEndPx - barrelLeft, boreRadiusPx * 2);
 
         // draw pressure expansion circles
         ctx.strokeStyle = `rgba(255, 159, 28, ${pressureGlow})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let r = 20; r < (projPosPx - barrelLeft); r += 40) {
+        for (let r = 20; r < (fireEndPx - barrelLeft); r += 40) {
           ctx.arc(barrelLeft + r, centerY, boreRadiusPx - 5, 0, Math.PI * 2);
         }
         ctx.stroke();
       } else {
-        // Just solid unignited gunpowder pile
-        ctx.fillStyle = '#222';
-        ctx.beginPath();
-        ctx.moveTo(barrelLeft, centerY + boreRadiusPx);
-        ctx.quadraticCurveTo(barrelLeft + 60, centerY + boreRadiusPx, barrelLeft + 80, centerY + boreRadiusPx - 15);
-        ctx.quadraticCurveTo(barrelLeft + 30, centerY - 10, barrelLeft, centerY - 15);
-        ctx.closePath();
-        ctx.fill();
+        if (projectileType === 'none') {
+          // Render a tied paper packet / pouch inside the chamber
+          ctx.save();
+          ctx.fillStyle = '#bca085'; // paper color
+          ctx.strokeStyle = '#8c7662';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(barrelLeft + 45, centerY, boreRadiusPx - 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw a pouch string tie
+          ctx.strokeStyle = '#5c4b3c';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(barrelLeft + 45, centerY - boreRadiusPx + 4);
+          ctx.lineTo(barrelLeft + 45, centerY + boreRadiusPx - 4);
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          // Just solid unignited gunpowder pile
+          ctx.fillStyle = '#222';
+          ctx.beginPath();
+          ctx.moveTo(barrelLeft, centerY + boreRadiusPx);
+          ctx.quadraticCurveTo(barrelLeft + 60, centerY + boreRadiusPx, barrelLeft + 80, centerY + boreRadiusPx - 15);
+          ctx.quadraticCurveTo(barrelLeft + 30, centerY - 10, barrelLeft, centerY - 15);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
 
       // Draw touch-hole matching slow-match descent & weather particles
@@ -526,7 +548,7 @@ export class CutawayRenderer {
     }
 
     // --- DRAW PROJECTILE & WADDING with Rattling ---
-    if (frame.stage !== 'flight' && frame.stage !== 'impact' && frame.stage !== 'aftermath') {
+    if (projectileType !== 'none' && frame.stage !== 'flight' && frame.stage !== 'impact' && frame.stage !== 'aftermath') {
       const projX = barrelLeft + (frame.projectileX * (barrelLengthPx - 30));
       
       let wobbleY = 0;

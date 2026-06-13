@@ -12,6 +12,33 @@
     <p>A historical simulation-lab of early firearms and material tolerances</p>
   </header>
 
+  <!-- Era Timeline Navigation -->
+  <nav class="era-selector-container">
+    <div class="era-timeline-line"></div>
+    <div class="era-buttons">
+      <button class="era-btn" id="btn-era-strange-fire" data-era="strange_fire">
+        <span class="era-badge">800s-1000s</span>
+        <span class="era-title">I. Strange Fire</span>
+      </button>
+      <button class="era-btn" id="btn-era-fire-delivered" data-era="fire_delivered">
+        <span class="era-badge">1000s-1100s</span>
+        <span class="era-title">II. Fire Delivered</span>
+      </button>
+      <button class="era-btn" id="btn-era-directional-blast" data-era="directional_blast">
+        <span class="era-badge">1100s-1200s</span>
+        <span class="era-title">III. Directional Blast</span>
+      </button>
+      <button class="era-btn active" id="btn-era-hand-cannon" data-era="hand_cannon">
+        <span class="era-badge">Late 1200s</span>
+        <span class="era-title">IV. The Difficult Shot</span>
+      </button>
+      <button class="era-btn" id="btn-era-early-cannon" data-era="early_cannon">
+        <span class="era-badge">1300s</span>
+        <span class="era-title">V. Foundry & Siege</span>
+      </button>
+    </div>
+  </nav>
+
   <main>
     <!-- Left Column: Simulation & Playback -->
     <section class="sim-container">
@@ -66,6 +93,7 @@
             <button id="tab-btn-instruments" class="chem-tab-btn active">🜍 Instruments</button>
             <button id="tab-btn-ledger" class="chem-tab-btn">🜏 Ledger</button>
             <button id="tab-btn-charts" class="chem-tab-btn">🜁 Telemetry Charts</button>
+            <button id="tab-btn-codex" class="chem-tab-btn">🕮 Codex</button>
           </div>
         </div>
         
@@ -243,6 +271,39 @@
             </div>
           </div>
         </div>
+
+        <!-- Tab 4: Codex -->
+        <div id="chem-tab-codex" class="chem-tab-content">
+          <div class="codex-container">
+            <div class="codex-header-block">
+              <h2 id="codex-title">IV. The Difficult Shot (Late 1200s)</h2>
+              <div class="codex-illustration-container">
+                <span id="codex-illustration" class="codex-glyph">🜔 🜕 🜘 🝓</span>
+              </div>
+              <p id="codex-description" class="codex-desc-text">The first true metal hand cannons utilized cast bronze or wrought iron...</p>
+            </div>
+            
+            <div class="codex-grid">
+              <div class="codex-panel-box">
+                <h3>🜔 Alchemical Objective</h3>
+                <p id="codex-objective">Achieve a clean, high-velocity target hit...</p>
+              </div>
+              <div class="codex-panel-box">
+                <h3>🜏 Historical Failures</h3>
+                <p id="codex-unreliable">Corrosion, heavy soot fouling, weld seam failures...</p>
+              </div>
+              <div class="codex-panel-box">
+                <h3>🜛 Technological Successor</h3>
+                <p id="codex-next-step">Scaling up metallurgical castings...</p>
+              </div>
+            </div>
+            
+            <div class="codex-challenge-box">
+              <div class="challenge-title">🏆 CHRONICLE CHALLENGE</div>
+              <p id="codex-challenge" class="challenge-text">Fire a Lead Ball from a Cast Bronze barrel achieving >90 m/s muzzle velocity without exceeding the yield strength (deformation).</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -282,6 +343,7 @@
         <div class="control-group">
           <label for="select-projectile">Projectile Type</label>
           <select id="select-projectile">
+            <option value="none">None (Incendiary Smoke Mix)</option>
             <option value="lead_ball" selected>Lead Ball (Spherical, self-lubricating)</option>
             <option value="rough_stone">Rough Stone Sphere (Irregular, high windage rattle)</option>
             <option value="lead_arrow">Lead Arrow-Bolt (Aero, wrapped gas seal)</option>

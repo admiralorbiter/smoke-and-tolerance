@@ -67,6 +67,7 @@ smoke-and-tolerance/
   │    ├── render/
   │    │    └── CutawayRenderer.ts # Canvas split-screen visual renderer
   │    ├── ui/
+  │    │    ├── ComparisonPanel.ts # Comparative diff calculations & HTML rendering
   │    │    ├── ControlsPanel.ts   # Input panel handlers
   │    │    └── Timeline.ts        # Playback & scrub stats manager
   │    ├── types.ts          # Shared TypeScript type definitions

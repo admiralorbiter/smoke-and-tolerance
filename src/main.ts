@@ -1,4 +1,4 @@
-import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame } from './types';
+import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY } from './types';
 import { CutawayRenderer } from './render/CutawayRenderer';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { Timeline } from './ui/Timeline';
@@ -14,8 +14,10 @@ class LaboratoryApp {
   private currentInputs: ShotInput | null = null;
   private shotHistory: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = [];
   private isInitialLoad: boolean = true;
+  private isEraSwitchLoad: boolean = false;
   private hasFiredShot: boolean = false;
   private persistentFouling: number = 0.0;
+  private activeEra: string = 'hand_cannon';
 
   private lastRenderedFrameIndex: number = 0;
   private lastRenderedFrames: any[] = [];
@@ -59,8 +61,10 @@ class LaboratoryApp {
         
         if (this.isInitialLoad) {
           this.isInitialLoad = false;
+        } else if (this.isEraSwitchLoad) {
+          this.isEraSwitchLoad = false;
+          this.comparisonPanel.hide();
         } else {
-          // Update comparison panel
           // Update comparison panel
           const prev = this.shotHistory[this.shotHistory.length - 1];
           if (prev) {
@@ -134,31 +138,54 @@ class LaboratoryApp {
     const tabBtnInstruments = document.getElementById('tab-btn-instruments');
     const tabBtnLedger = document.getElementById('tab-btn-ledger');
     const tabBtnCharts = document.getElementById('tab-btn-charts');
+    const tabBtnCodex = document.getElementById('tab-btn-codex');
 
     tabBtnInstruments?.addEventListener('click', () => this.selectTab('instruments'));
     tabBtnLedger?.addEventListener('click', () => this.selectTab('ledger'));
     tabBtnCharts?.addEventListener('click', () => this.selectTab('charts'));
+    tabBtnCodex?.addEventListener('click', () => this.selectTab('codex'));
+
+    // 4. Era Navigation Event Listeners
+    const eraButtons = document.querySelectorAll('.era-btn');
+    eraButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const eraId = btn.getAttribute('data-era');
+        if (eraId && ERA_REGISTRY[eraId]) {
+          this.switchEra(eraId);
+        }
+      });
+    });
+
+    // Initialize with hand_cannon defaults
+    this.activeEra = 'hand_cannon';
+    const activeConfig = ERA_REGISTRY[this.activeEra];
+    this.controls.applyEraRestrictions(activeConfig);
+    this.updateCodexPanel(activeConfig);
 
     // Run an initial blank shot to show the static device in setup
     this.handleInitialState();
   }
 
-  private selectTab(activeTab: 'instruments' | 'ledger' | 'charts') {
+  private selectTab(activeTab: 'instruments' | 'ledger' | 'charts' | 'codex') {
     const tabBtnInstruments = document.getElementById('tab-btn-instruments');
     const tabBtnLedger = document.getElementById('tab-btn-ledger');
     const tabBtnCharts = document.getElementById('tab-btn-charts');
+    const tabBtnCodex = document.getElementById('tab-btn-codex');
 
     const tabContentInstruments = document.getElementById('chem-tab-instruments');
     const tabContentLedger = document.getElementById('chem-tab-ledger');
     const tabContentCharts = document.getElementById('chem-tab-charts');
+    const tabContentCodex = document.getElementById('chem-tab-codex');
 
     tabBtnInstruments?.classList.toggle('active', activeTab === 'instruments');
     tabBtnLedger?.classList.toggle('active', activeTab === 'ledger');
     tabBtnCharts?.classList.toggle('active', activeTab === 'charts');
+    tabBtnCodex?.classList.toggle('active', activeTab === 'codex');
 
     tabContentInstruments?.classList.toggle('active', activeTab === 'instruments');
     tabContentLedger?.classList.toggle('active', activeTab === 'ledger');
     tabContentCharts?.classList.toggle('active', activeTab === 'charts');
+    tabContentCodex?.classList.toggle('active', activeTab === 'codex');
 
     if (activeTab === 'charts' && this.lastRenderedFrames.length > 0) {
       this.renderCharts(this.lastRenderedFrames, this.lastRenderedFrameIndex, this.shotHistory);
@@ -630,6 +657,53 @@ class LaboratoryApp {
     ctx.fillStyle = '#5c4b3c';
     ctx.font = 'normal 9px Share Tech Mono, monospace';
     ctx.fillText(`Duration: ${totalTimeMs.toFixed(1)}ms`, w - 110, plotY + plotH + 15);
+  }
+
+  private switchEra(eraId: string) {
+    if (this.activeEra === eraId) return;
+    this.activeEra = eraId;
+
+    // Toggle active timeline button
+    const eraButtons = document.querySelectorAll('.era-btn');
+    eraButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-era') === eraId);
+    });
+
+    // Apply setting locks
+    const config = ERA_REGISTRY[eraId];
+    this.controls.applyEraRestrictions(config);
+    
+    // Update Codex description
+    this.updateCodexPanel(config);
+
+    // Purge Run History (Cassandra's Decoupling Rule)
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+    
+    // Switch to Codex tab so the user can read the background
+    this.selectTab('codex');
+
+    // Trigger initial setup simulation to immediately update graphics/instruments
+    this.isEraSwitchLoad = true;
+    this.handleInitialState();
+  }
+
+  private updateCodexPanel(config: any) {
+    const title = document.getElementById('codex-title');
+    const illustration = document.getElementById('codex-illustration');
+    const description = document.getElementById('codex-description');
+    const objective = document.getElementById('codex-objective');
+    const unreliable = document.getElementById('codex-unreliable');
+    const nextStep = document.getElementById('codex-next-step');
+    const challenge = document.getElementById('codex-challenge');
+
+    if (title) title.textContent = `${config.name} (${config.dateRange})`;
+    if (illustration) illustration.textContent = config.codex.illustration;
+    if (description) description.textContent = config.codex.description;
+    if (objective) objective.textContent = config.codex.objective;
+    if (unreliable) unreliable.textContent = config.codex.unreliable;
+    if (nextStep) nextStep.textContent = config.codex.nextStep;
+    if (challenge) challenge.textContent = config.codex.challenge;
   }
 }
 

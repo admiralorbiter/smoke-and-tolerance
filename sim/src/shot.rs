@@ -22,6 +22,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     // Projectile Setup
     let (proj_mass, proj_radius, drag_coeff, _is_arrow, _is_gravel, shape_regularity) = match input.projectile_type.as_str() {
+        "none" => (0.001, 0.0, 1.0, false, false, 0.0),
         "lead_arrow" => (0.050, bore_radius - 0.0002, 0.15, true, false, 0.95),
         "pebbles" => (0.035, bore_radius - 0.0010, 1.10, false, true, 0.20),
         "rough_stone" => (0.080, bore_radius - 0.0015, 0.85, false, false, 0.40),
@@ -326,30 +327,36 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             // Force balance
             let force_pressure = (pressure - 0.1) * 1_000_000.0 * bore_area;
 
-            if !is_moving {
-                if force_pressure > static_friction_threshold {
-                    is_moving = true;
+            if input.projectile_type == "none" {
+                is_moving = false;
+                proj_v = 0.0;
+                proj_x = 0.0;
+            } else {
+                if !is_moving {
+                    if force_pressure > static_friction_threshold {
+                        is_moving = true;
+                    }
                 }
-            }
 
-            if is_moving {
-                let mut jitter_coeff = 1.0;
-                if input.projectile_type == "rough_stone" {
-                    let noise = (rng.gen_range(-15..15) as f64) / 100.0;
-                    jitter_coeff = (1.0 + noise).max(0.5);
-                }
-                
-                let force_friction = dynamic_friction_coeff * static_friction_threshold * jitter_coeff;
-                let force_net = (force_pressure - force_friction).max(0.0);
-                
-                let accel = force_net / proj_mass;
-                proj_v += accel * (dt / 1000.0);
-                proj_x += proj_v * (dt / 1000.0);
+                if is_moving {
+                    let mut jitter_coeff = 1.0;
+                    if input.projectile_type == "rough_stone" {
+                        let noise = (rng.gen_range(-15..15) as f64) / 100.0;
+                        jitter_coeff = (1.0 + noise).max(0.5);
+                    }
+                    
+                    let force_friction = dynamic_friction_coeff * static_friction_threshold * jitter_coeff;
+                    let force_net = (force_pressure - force_friction).max(0.0);
+                    
+                    let accel = force_net / proj_mass;
+                    proj_v += accel * (dt / 1000.0);
+                    proj_x += proj_v * (dt / 1000.0);
 
-                if proj_x >= barrel_length {
-                    proj_x = barrel_length;
-                    has_exited = true;
-                    exit_velocity = proj_v;
+                    if proj_x >= barrel_length {
+                        proj_x = barrel_length;
+                        has_exited = true;
+                        exit_velocity = proj_v;
+                    }
                 }
             }
 
