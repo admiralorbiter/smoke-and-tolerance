@@ -256,10 +256,13 @@
         </div>
 
         <div class="control-group">
-          <label for="select-propellant">Propellant Grain Processing</label>
+          <label for="select-propellant">Propellant Consistency</label>
           <select id="select-propellant">
-            <option value="meal">Meal / Serpentine (Slow, separates in transport)</option>
-            <option value="corned" selected>Corned / Granulated (Fast burning, explosive)</option>
+            <option value="uneven">Uneven Serpentine Mix (Separated Meal)</option>
+            <option value="fast_then_weak">Quick-Burning Granular (Early Corned)</option>
+            <option value="steady" selected>Purified Alchemical Spirit (Steady Corned)</option>
+            <option value="slow_smoky">Charcoal-Heavy Smut (Slow Mechanical)</option>
+            <option value="damp_partial">Damp Spoiled Batch (Water-Damaged)</option>
           </select>
         </div>
 
@@ -288,6 +291,15 @@
             <option value="tow" selected>Tow Packing (Coarse flax fibers)</option>
             <option value="clay">Clay Plug (Airtight seal, high friction)</option>
           </select>
+        </div>
+
+        <!-- Bore Fouling Status Meter -->
+        <div class="control-group">
+          <label>🜏 Bore Fouling State</label>
+          <div class="fouling-meter-container" style="position: relative; width: 100%; height: 20px; background: #0c0a09; border: 1px solid var(--border-ink); border-radius: 2px; overflow: hidden; margin-top: 5px;">
+            <div id="fouling-meter-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3a322c 0%, #1c1815 100%); transition: width 0.3s ease;"></div>
+            <span id="fouling-meter-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); text-shadow: 1px 1px 0px #000;">CLEAN (0%)</span>
+          </div>
         </div>
 
         <button id="btn-fire" class="fire-btn">🔥 FIRE TEST SHOT</button>

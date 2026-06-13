@@ -33,7 +33,7 @@ export class ControlsPanel {
   public getInputs(): ShotInput {
     return {
       barrelMaterial: this.selectBarrel.value,
-      propellantType: this.selectPropellant.value,
+      propellantType: "corned", // legacy placeholder
       refinementLevel: parseFloat(this.sliderRefinement.value),
       projectileType: this.selectProjectile.value,
       sealingQuality: this.selectSealing.value,
@@ -42,6 +42,8 @@ export class ControlsPanel {
       weatherRain: 0.0,
       primingQuality: 100.0,
       seed: BigInt(Math.floor(Math.random() * 1000000)) as any,
+      persistentFouling: 0.0,
+      propellantProfile: this.selectPropellant.value,
     };
   }
 

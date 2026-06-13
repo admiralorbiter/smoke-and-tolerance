@@ -114,6 +114,7 @@ Where:
 *   $dE_{added} = dm_{generated} \cdot C_v \cdot T_{ignition}$ (energy added from powder combustion)
 *   $dE_{leak} = dm_{leak} \cdot C_p \cdot T$ (enthalpy carried away by venting gas)
 *   $dW = P \cdot A \cdot dx$ (work done moving the projectile)
+*   $dQ_{lost} = h \cdot A_{bore} \cdot (T - 293.15) \cdot dt$ (convective heat loss to the barrel walls, where $h$ is Bronze > Iron > Bamboo)
 *   $T_{new} = \frac{E_{new}}{m_{gas} \cdot C_v}$ (resulting chamber temperature)
 *   $C_v \approx 718\text{ J/(kg}\cdot\text{K)}$, $C_p \approx 1005\text{ J/(kg}\cdot\text{K)}$, and $R = 287\text{ J/(kg}\cdot\text{K)}$.
 
@@ -131,7 +132,7 @@ Where:
 
 ## 🜔 WASM Shared Memory Layout
 
-To achieve zero-copy transfer speeds, the simulation results are packed into a flat `Float64Array` shared buffer. Each frame uses a stride of exactly **`STRIDE_COUNT = 16`** floats (128 bytes per frame).
+To achieve zero-copy transfer speeds, the simulation results are packed into a flat `Float64Array` shared buffer. Each frame uses a stride of exactly **`STRIDE_COUNT = 20`** floats (160 bytes per frame).
 
 The layout of the elements within the stride is:
 
@@ -153,4 +154,9 @@ The layout of the elements within the stride is:
 | `13` | `gas_mass` | `f64` | Active gas mass in chamber (kg) |
 | `14` | `temperature` | `f64` | Gas chamber temperature (K) |
 | `15` | `grain_radius` | `f64` | Average powder grain radius (m) |
+| `16` | `wall_heat_loss` | `f64` | Convective energy lost to barrel walls (J) |
+| `17` | `fouling_index` | `f64` | Persistent fouling index (0-1) |
+| `18` | `burn_profile_code` | `f64` | Burn profile ID code |
+| `19` | `padding` | `f64` | Padding float for 64-bit boundary alignment |
+
 

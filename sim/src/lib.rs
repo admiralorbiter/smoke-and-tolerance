@@ -18,9 +18,11 @@ pub struct ShotInput {
     pub weather_rain: f64,          // 0-100
     pub priming_quality: f64,       // 0-100
     pub seed: u64,
+    pub persistent_fouling: f64,    // 0-1
+    pub propellant_profile: String, // "uneven", "fast_then_weak", "steady", "slow_smoky", "damp_partial"
 }
 
-pub const STRIDE_COUNT: usize = 16;
+pub const STRIDE_COUNT: usize = 20;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +44,9 @@ pub struct ShotFrame {
     pub gas_mass: f64,              // chamber gas mass in kg
     pub temperature: f64,           // chamber gas temperature in Kelvin
     pub grain_r: f64,               // propellant grain radius in meters
+    pub wall_heat_loss: f64,        // convective energy lost in Joules
+    pub fouling_index: f64,         // persistent fouling index
+    pub burn_profile_code: f64,     // code representing propellant profile
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -111,6 +116,10 @@ pub fn simulate_shot(val: JsValue) -> Result<JsValue, JsValue> {
             FRAME_BUFFER.push(frame.gas_mass);
             FRAME_BUFFER.push(frame.temperature);
             FRAME_BUFFER.push(frame.grain_r);
+            FRAME_BUFFER.push(frame.wall_heat_loss);
+            FRAME_BUFFER.push(frame.fouling_index);
+            FRAME_BUFFER.push(frame.burn_profile_code);
+            FRAME_BUFFER.push(0.0); // padding
         }
 
         let wasm_result = ShotResultWasm {
@@ -130,6 +139,7 @@ pub fn simulate_shot(val: JsValue) -> Result<JsValue, JsValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shot::run_simulation;
 
     #[test]
     fn test_simulation_happy_path() {
@@ -144,9 +154,11 @@ mod tests {
             weather_rain: 0.0,
             priming_quality: 100.0,
             seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
         };
 
-        let result = shot::run_simulation(input);
+        let result = run_simulation(input);
         assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
         assert!(!result.outcomes.contains(&"stuck_projectile".to_string()));
     }
@@ -164,9 +176,39 @@ mod tests {
             weather_rain: 0.0,
             priming_quality: 100.0,
             seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
         };
 
-        let result = shot::run_simulation(input);
+        let result = run_simulation(input);
         assert!(result.outcomes.contains(&"barrel_failure".to_string()));
+    }
+
+    #[test]
+    fn test_fouling_accumulation_impact() {
+        let mut input_clean = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+        };
+        let result_clean = run_simulation(input_clean.clone());
+        
+        let mut input_fouled = input_clean;
+        input_fouled.persistent_fouling = 0.8;
+        let result_fouled = run_simulation(input_fouled);
+        
+        let peak_v_clean = result_clean.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        let peak_v_fouled = result_fouled.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        
+        assert!(peak_v_fouled < peak_v_clean, "Fouling must degrade muzzle velocity via drag!");
     }
 }

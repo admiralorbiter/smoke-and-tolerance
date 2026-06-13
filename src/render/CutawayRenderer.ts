@@ -79,6 +79,22 @@ export class CutawayRenderer {
       this.sootLevel = frame.fouling;
     }
 
+    // Camera shake calculation based on pressure
+    let dx = 0;
+    let dy = 0;
+    if (frame.stage === 'ignition' || frame.stage === 'pressure' || frame.stage === 'movement') {
+      const shakeIntensity = Math.min(6.0, frame.pressure * 0.18);
+      if (shakeIntensity > 0.1) {
+        dx = (Math.random() - 0.5) * shakeIntensity;
+        dy = (Math.random() - 0.5) * shakeIntensity;
+      }
+    }
+
+    ctx.save();
+    if (dx !== 0 || dy !== 0) {
+      ctx.translate(dx, dy);
+    }
+
     // --- DRAW TARGET RANGE (Right Side) ---
     this.drawTargetRange(frame, projectileType);
 
@@ -114,6 +130,25 @@ export class CutawayRenderer {
       ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.85, this.sootLevel * 0.95)})`;
       ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, 4);
       ctx.fillRect(barrelLeft, centerY + boreRadiusPx - 4, barrelLengthPx, 4);
+
+      // Draw jagged carbon crust bumps for high fouling levels
+      if (this.sootLevel > 0.5) {
+        ctx.fillStyle = `rgba(10, 8, 7, ${Math.min(0.95, this.sootLevel)})`;
+        // Draw top bore wall bumps
+        for (let x = barrelLeft + 10; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+          ctx.beginPath();
+          const height = 3 + Math.sin(x * 0.5) * 2.5;
+          ctx.arc(x, centerY - boreRadiusPx + 2, height, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Draw bottom bore wall bumps
+        for (let x = barrelLeft + 15; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+          ctx.beginPath();
+          const height = 3 + Math.cos(x * 0.5) * 2.5;
+          ctx.arc(x, centerY + boreRadiusPx - 2, height, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
 
     if (isRuptured) {
@@ -542,7 +577,6 @@ export class CutawayRenderer {
 
     ctx.restore();
 
-    // --- DRAW MANUSCRIPT OVERLAYS (When paused/scrubbing) ---
     if (isPaused) {
       this.drawManuscriptCallouts(
         frame,
@@ -553,6 +587,7 @@ export class CutawayRenderer {
         barrelLengthPx
       );
     }
+    ctx.restore(); // camera shake restore
   }
 
   private drawChemistryZoom(

@@ -12,7 +12,6 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     let mut frames = Vec::new();
     let mut outcomes = Vec::new();
-    let mut warnings: Vec<String> = Vec::new();
 
     // Physical dimensions & constants
     let barrel_length = 0.30; // 30 cm barrel length
@@ -22,7 +21,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let touchhole_area = std::f64::consts::PI * touchhole_radius * touchhole_radius;
 
     // Projectile Setup
-    let (proj_mass, proj_radius, drag_coeff, is_arrow, is_gravel, shape_regularity) = match input.projectile_type.as_str() {
+    let (proj_mass, proj_radius, drag_coeff, _is_arrow, _is_gravel, shape_regularity) = match input.projectile_type.as_str() {
         "lead_arrow" => (0.050, bore_radius - 0.0002, 0.15, true, false, 0.95),
         "pebbles" => (0.035, bore_radius - 0.0010, 1.10, false, true, 0.20),
         "rough_stone" => (0.080, bore_radius - 0.0015, 0.85, false, false, 0.40),
@@ -43,31 +42,53 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         std::f64::consts::PI * (bore_radius * bore_radius - effective_proj_radius * effective_proj_radius)
     };
 
-    // Frictional properties
-    let static_friction_threshold = match input.sealing_quality.as_str() {
+    // weather parameters
+    let wind_disturbance = input.weather_wind / 100.0;
+    let humidity_slowdown = input.weather_humidity / 100.0;
+
+    // Propellant consistency & burn profiles
+    let (burn_profile_code, is_corned, initial_grain_r, burn_rate_mult, initial_gas_yield, is_damp) = match input.propellant_profile.as_str() {
+        "uneven" => (0.0, false, 0.0, 1.0, 0.45, false),
+        "fast_then_weak" => (1.0, true, 0.0006, 1.5, 0.45, false),
+        "steady" => (2.0, true, 0.0012, 1.0, 0.45, false),
+        "slow_smoky" => (3.0, false, 0.0, 0.5, 0.31, false),
+        "damp_partial" | _ => (4.0, false, 0.0, 0.2, 0.225, true),
+    };
+
+    let propellant_mass: f64 = 0.015; // 15 grams propellant charge
+    let grain_density: f64 = 1700.0; // kg/m^3
+    let grain_r0: f64 = initial_grain_r;
+    let mut grain_r = grain_r0;
+    let num_grains = if is_corned {
+        let grain_volume = (4.0 / 3.0) * std::f64::consts::PI * grain_r0.powi(3);
+        let grain_mass = grain_density * grain_volume;
+        propellant_mass / grain_mass
+    } else {
+        0.0
+    };
+
+    // Frictional properties with persistent fouling scaling
+    let base_static_friction = match input.sealing_quality.as_str() {
         "none" => 80.0,
         "tow" => 250.0,
-        "clay" | _ => 750.0, // tight clay plug requires high pressure to budge
+        "clay" | _ => 750.0,
     };
+    let static_friction_threshold = base_static_friction * (1.0 + input.persistent_fouling * 1.2);
+
     let dynamic_friction_coeff = match input.projectile_type.as_str() {
         "lead_arrow" => 0.12,
         "pebbles" => 0.28,
         "rough_stone" => 0.38,
-        "lead_ball" | _ => 0.08, // lead is soft and self-lubricating
+        "lead_ball" | _ => 0.08,
     };
 
-    // Weather impact on ignition delay & duds
-    let rain_dud_chance = input.weather_rain / 100.0;
-    let wind_disturbance = input.weather_wind / 100.0;
-    let humidity_slowdown = input.weather_humidity / 100.0;
-
-    // Propellant charge setup (15 grams)
-    let propellant_mass: f64 = 0.015; // 15 grams propellant charge
-    let grain_density: f64 = 1700.0; // kg/m^3
-    let grain_r0: f64 = 0.0012; // 1.2 mm initial grain radius
-    let grain_volume = (4.0 / 3.0) * std::f64::consts::PI * grain_r0.powi(3);
-    let grain_mass = grain_density * grain_volume;
-    let num_grains = propellant_mass / grain_mass;
+    // Convective wall heat cooling parameters
+    let h_material = match input.barrel_material.as_str() {
+        "cast_bronze" => 15000.0,
+        "wrought_iron" => 8000.0,
+        "bamboo" | _ => 1200.0,
+    };
+    let mut accumulated_heat_loss = 0.0;
 
     // Chemistry reaction kinetics parameters
     let temp_ignition = 2400.0 * (1.0 - humidity_slowdown * 0.15); // Peak temp in K
@@ -76,8 +97,6 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let mut total_gas_leaked: f64 = 0.0;
     let mut total_soot_fouling: f64 = 0.0;
     let mut total_smoke_ejected: f64 = 0.0;
-
-    let mut grain_r: f64 = grain_r0;
     let mut current_temp: f64 = 293.15; // room temp in K
 
     // Thermodynamic constants
@@ -87,11 +106,11 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let mut chamber_energy: f64 = gas_mass * cv * current_temp;
 
     // 1. Check for absolute Misfire (Dud)
-    let is_dud = input.priming_quality < 15.0;
+    // Priming quality < 15.0, or extremely high fouling with wet/damp powder
+    let is_dud = input.priming_quality < 15.0 || (input.persistent_fouling > 0.9 && is_damp);
 
     if is_dud {
         outcomes.push("misfire".to_string());
-        // Generate a few spark frames showing touchhole failure
         for step in 0..15 {
             let t = step as f64 / 15.0;
             frames.push(ShotFrame {
@@ -112,6 +131,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 gas_mass: 0.0,
                 temperature: 293.15,
                 grain_r: grain_r0,
+                wall_heat_loss: 0.0,
+                fouling_index: input.persistent_fouling,
+                burn_profile_code,
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
@@ -121,7 +143,14 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let base_ignition_delay = 2.0; // ms
     let weather_ignition_delay = humidity_slowdown * 8.0;
     let skill_ignition_delay = (100.0 - input.priming_quality) * 0.15;
-    let total_ignition_delay = base_ignition_delay + weather_ignition_delay + skill_ignition_delay + rng.gen_range(0.0..1.5);
+    let damp_ignition_delay = if is_damp { 8.0 } else { 0.0 };
+    let fouling_ignition_delay = input.persistent_fouling * 6.0;
+    let total_ignition_delay = base_ignition_delay 
+        + weather_ignition_delay 
+        + skill_ignition_delay 
+        + damp_ignition_delay 
+        + fouling_ignition_delay 
+        + rng.gen_range(0.0..1.5);
 
     // Initial state variables
     let mut time_ms: f64 = 0.0;
@@ -149,11 +178,10 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         // Stage 1: Setup & Pre-ignition
         if time_ms < total_ignition_delay {
             stage = "ignition".to_string();
-            // Slow match burning glow
             let ignition_progress = time_ms / total_ignition_delay;
             let temp_now = 293.15 + (temp_ignition - 293.15) * ignition_progress;
             frames.push(ShotFrame {
-                t: 0.0, // normalized will be done later
+                t: 0.0,
                 time_ms,
                 stage: stage.clone(),
                 projectile_x: 0.0,
@@ -170,6 +198,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 gas_mass: 0.0,
                 temperature: temp_now,
                 grain_r: grain_r0,
+                wall_heat_loss: 0.0,
+                fouling_index: input.persistent_fouling,
+                burn_profile_code,
             });
             current_temp = temp_now;
             chamber_energy = gas_mass * cv * current_temp;
@@ -180,23 +211,29 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         if !has_exited && !is_ruptured {
             stage = if is_moving { "movement".to_string() } else { "pressure".to_string() };
 
-            // Propellant burn calculation
-            let burn_modifier = (1.0 - humidity_slowdown * 0.3) * (0.5 + 0.5 * (input.refinement_level / 100.0));
+            // Propellant burn rate
+            let burn_modifier = (1.0 - humidity_slowdown * 0.3) * (0.5 + 0.5 * (input.refinement_level / 100.0)) * burn_rate_mult;
+            let mut r_burn = 0.00004 * burn_modifier * pressure.powf(0.5).max(0.1);
             
-            // Linear burning rate in meters per ms
-            let r_burn = 0.00004 * burn_modifier * pressure.powf(0.5).max(0.1);
-            
+            // Uneven burn noise
+            if burn_profile_code == 0.0 && r_burn > 0.0 {
+                let noise = rng.gen_range(-0.25..0.25);
+                r_burn *= 1.0 + noise;
+            }
+
             let mut burned_in_step = 0.0;
             if unburned_mass > 0.0 {
-                let a_surface = match input.propellant_type.as_str() {
-                    "meal" => 0.005, // constant surface area of loose meal powder pile
-                    "corned" | _ => {
-                        // degressive surface area of shrinking spheres
-                        if grain_r > 0.0 {
-                            num_grains * 4.0 * std::f64::consts::PI * grain_r * grain_r
-                        } else {
-                            0.0
-                        }
+                let a_surface = if is_corned {
+                    if grain_r > 0.0 {
+                        num_grains * 4.0 * std::f64::consts::PI * grain_r * grain_r
+                    } else {
+                        0.0
+                    }
+                } else {
+                    match input.propellant_profile.as_str() {
+                        "slow_smoky" => 0.004,
+                        "damp_partial" => 0.003,
+                        "uneven" | _ => 0.005,
                     }
                 };
 
@@ -207,21 +244,21 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 burned_in_step = generated;
                 unburned_mass -= burned_in_step;
                 
-                // shrink grain radius
-                if input.propellant_type == "corned" {
+                if is_corned {
                     grain_r = (grain_r - r_burn * dt).max(0.0);
                 }
             }
 
-            // Chemical gas conversion efficiency (wet powder yields less gas, more soot/ash)
-            let gas_yield_factor = 0.45 * (1.0 - humidity_slowdown * 0.25);
+            // Chemical gas yield
+            let gas_yield_factor = initial_gas_yield * (1.0 - humidity_slowdown * 0.25);
             let gas_generated = burned_in_step * gas_yield_factor;
             gas_mass += gas_generated;
 
-            // Mass conservation tracking: residue generated
+            // Soot & smoke residues
+            let soot_fraction = if burn_profile_code == 3.0 || burn_profile_code == 4.0 { 0.30 } else { 0.15 };
             let residue_generated = burned_in_step * (1.0 - gas_yield_factor);
-            let step_soot = residue_generated * 0.15;
-            let step_smoke = residue_generated * 0.85;
+            let step_soot = residue_generated * soot_fraction;
+            let step_smoke = residue_generated * (1.0 - soot_fraction);
             total_soot_fouling += step_soot;
             total_smoke_ejected += step_smoke;
 
@@ -232,22 +269,22 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             let d_vol = (chamber_vol - prev_chamber_vol).max(0.0);
             let work_done = (pressure - 0.1).max(0.0) * 1_000_000.0 * d_vol; // in Joules
 
-            // Leak calculations: Gas leakage from windage and touchhole (choked compressible flow)
-            let c_leak = 0.62; // discharge coefficient
-            let r_gas = 280.0; // specific gas constant
+            // Leak calculations
+            let c_leak = 0.62;
+            let r_gas = 280.0;
             let choked_constant = (gamma * (2.0 / (gamma + 1.0)).powf((gamma + 1.0) / (gamma - 1.0))).sqrt();
             let rt_sqrt = (r_gas * current_temp).sqrt();
             let choked_factor = choked_constant / rt_sqrt;
             let pressure_pa = pressure * 1_000_000.0;
 
             let windage_leak = if gap_area > 0.0 && pressure > 0.1 {
-                c_leak * gap_area * pressure_pa * choked_factor * (dt / 1000.0) // kg leaked in step
+                c_leak * gap_area * pressure_pa * choked_factor * (dt / 1000.0)
             } else {
                 0.0
             };
 
             let touchhole_leak = if pressure > 0.1 {
-                c_leak * touchhole_area * pressure_pa * choked_factor * (dt / 1000.0) // kg leaked in step
+                c_leak * touchhole_area * pressure_pa * choked_factor * (dt / 1000.0)
             } else {
                 0.0
             };
@@ -256,12 +293,17 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             gas_mass -= actual_leak;
             total_gas_leaked += actual_leak;
 
-            leakage_rate = actual_leak / dt; // kg leaked per ms
+            leakage_rate = actual_leak / dt;
 
-            // Thermodynamic Energy conservation update
+            // Continuous wall cooling
+            let a_bore = 2.0 * std::f64::consts::PI * bore_radius * (0.05 + proj_x);
+            let q_lost = h_material * a_bore * (current_temp - 293.15).max(0.0) * (dt / 1000.0);
+            accumulated_heat_loss += q_lost;
+
+            // Energy update
             let energy_added = gas_generated * cv * temp_ignition;
             let energy_lost_leak = actual_leak * cp * current_temp;
-            chamber_energy = (chamber_energy + energy_added - energy_lost_leak - work_done).max(0.0);
+            chamber_energy = (chamber_energy + energy_added - energy_lost_leak - work_done - q_lost).max(0.0);
 
             if gas_mass > 0.000001 {
                 current_temp = chamber_energy / (gas_mass * cv);
@@ -271,18 +313,18 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             }
             current_temp = current_temp.clamp(293.15, 3000.0);
 
-            // Pressure calculation: Nobel-Abel gas expansion
-            let co_volume = 0.0008; // m^3/kg
+            // Pressure (Nobel-Abel)
+            let co_volume = 0.0008;
             let denominator = chamber_vol - co_volume * gas_mass;
             pressure = if denominator > 0.000001 {
-                (gas_mass * r_gas * current_temp / denominator) / 1_000_000.0 // Convert to MPa
+                (gas_mass * r_gas * current_temp / denominator) / 1_000_000.0
             } else {
                 0.1
             };
-            pressure = pressure.max(0.1); // clamp to atmospheric
+            pressure = pressure.max(0.1);
 
             // Force balance
-            let force_pressure = (pressure - 0.1) * 1_000_000.0 * bore_area; // Newtons
+            let force_pressure = (pressure - 0.1) * 1_000_000.0 * bore_area;
 
             if !is_moving {
                 if force_pressure > static_friction_threshold {
@@ -291,8 +333,6 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             }
 
             if is_moving {
-                // Dynamic friction force
-                // Stone shot rattling creates jagged spikes in friction
                 let mut jitter_coeff = 1.0;
                 if input.projectile_type == "rough_stone" {
                     let noise = (rng.gen_range(-15..15) as f64) / 100.0;
@@ -303,7 +343,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 let force_net = (force_pressure - force_friction).max(0.0);
                 
                 let accel = force_net / proj_mass;
-                proj_v += accel * (dt / 1000.0); // dt is in ms
+                proj_v += accel * (dt / 1000.0);
                 proj_x += proj_v * (dt / 1000.0);
 
                 if proj_x >= barrel_length {
@@ -313,7 +353,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 }
             }
 
-            // Calculate barrel von Mises stress
+            // Hoop stress
             let hoop_stress = barrel.calculate_von_mises_stress(pressure);
             peak_stress = peak_stress.max(hoop_stress);
 
@@ -331,8 +371,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 step_warnings.push("Gas blowing past projectile".to_string());
             }
 
+            let fouling_index_now = (input.persistent_fouling + (total_soot_fouling / 0.015)).min(1.0);
             frames.push(ShotFrame {
-                t: 0.0, // fill later
+                t: 0.0,
                 time_ms,
                 stage: stage.clone(),
                 projectile_x: proj_x / barrel_length,
@@ -349,6 +390,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 gas_mass,
                 temperature: current_temp,
                 grain_r,
+                wall_heat_loss: accumulated_heat_loss,
+                fouling_index: fouling_index_now,
+                burn_profile_code,
             });
 
             if is_ruptured {
@@ -357,8 +401,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         }
     }
 
+    let fouling_index_now = (input.persistent_fouling + (total_soot_fouling / 0.015)).min(1.0);
+
     if is_ruptured {
-        // Complete the failure visualization
         let last_frame = frames.last().unwrap().clone();
         for step in 1..10 {
             let decay = (-1.0 * step as f64).exp();
@@ -369,7 +414,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 projectile_x: last_frame.projectile_x,
                 projectile_y: 0.0,
                 projectile_velocity: 0.0,
-                pressure: 0.1, // collapsed pressure
+                pressure: 0.1,
                 leakage: 0.0,
                 barrel_stress: 0.0,
                 smoke: last_frame.smoke * 1.5,
@@ -380,13 +425,15 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 gas_mass: gas_mass * decay,
                 temperature: 293.15 + (current_temp - 293.15) * decay,
                 grain_r,
+                wall_heat_loss: accumulated_heat_loss,
+                fouling_index: fouling_index_now,
+                burn_profile_code,
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
     }
 
     if !has_exited {
-        // Projectile stuck in bore
         outcomes.push("stuck_projectile".to_string());
         let last_frame = frames.last().unwrap().clone();
         for step in 1..10 {
@@ -409,28 +456,28 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 gas_mass: gas_mass * decay,
                 temperature: 293.15 + (current_temp - 293.15) * decay,
                 grain_r,
+                wall_heat_loss: accumulated_heat_loss,
+                fouling_index: fouling_index_now,
+                burn_profile_code,
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
     }
 
-    // Stage 3: Flight trajectory and target impact
+    // Stage 3: Flight trajectory
     stage = "flight".to_string();
-    
-    // Wind and rattling deflects trajectory
     let base_jitter = (wind_disturbance * 2.8) + (1.0 - shape_regularity) * 4.2;
     let aim_jitter = rng.gen_range(-base_jitter..base_jitter);
 
-    // Initial flight state (2D projectile motion)
-    let target_distance = 35.0; // Target is placed 35m away
+    let target_distance = 35.0;
     let mut flight_x = 0.0;
-    let mut flight_y = 1.2; // Handheld height
+    let mut flight_y = 1.2;
     let angle_rad = aim_jitter.to_radians();
     
     let mut vx = exit_velocity * angle_rad.cos();
     let mut vy = exit_velocity * angle_rad.sin();
     
-    let flight_dt = 0.01; // 10ms steps for flight ballistics
+    let flight_dt = 0.01;
     let mut flight_time = 0.0;
     let max_flight_duration = 3.0;
 
@@ -439,15 +486,13 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     while flight_x < target_distance && flight_y > 0.0 && flight_time < max_flight_duration {
         flight_time += flight_dt;
         
-        // Flight drag
-        let air_density = 1.225; // kg/m^3
+        let air_density = 1.225;
         let proj_area = std::f64::consts::PI * proj_radius * proj_radius;
         let speed = (vx*vx + vy*vy).sqrt();
         
         let drag_force = 0.5 * drag_coeff * air_density * proj_area * speed * speed;
         let drag_accel = drag_force / proj_mass;
         
-        // Update velocity components
         vx -= drag_accel * (vx / speed) * flight_dt;
         vy -= (9.81 + drag_accel * (vy / speed)) * flight_dt;
         
@@ -457,16 +502,15 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         flight_frames.push((flight_x, flight_y, speed));
     }
 
-    // Add flight frames to the main frame array
     let total_flight_frames = flight_frames.len();
     for (i, (fx, fy, fspeed)) in flight_frames.into_iter().enumerate() {
         let normalized_step = i as f64 / total_flight_frames.max(1) as f64;
         let decay = (-0.3 * i as f64).exp();
         frames.push(ShotFrame {
-            t: 0.0, // fill later
+            t: 0.0,
             time_ms: time_ms + i as f64 * (flight_dt * 1000.0),
             stage: if fx >= target_distance || fy <= 0.0 { "impact".to_string() } else { stage.clone() },
-            projectile_x: fx, // absolute flight coordinates mapped to frame
+            projectile_x: fx,
             projectile_y: fy,
             projectile_velocity: fspeed,
             pressure: 0.1,
@@ -486,10 +530,13 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             gas_mass: gas_mass * decay,
             temperature: 293.15 + (current_temp - 293.15) * decay,
             grain_r,
+            wall_heat_loss: accumulated_heat_loss,
+            fouling_index: fouling_index_now,
+            burn_profile_code,
         });
     }
 
-    // Final outcome categorization
+    // Final outcome
     let final_y = frames.last().unwrap().projectile_y;
     let final_x = frames.last().unwrap().projectile_x;
 
@@ -501,14 +548,13 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             outcomes.push("target_miss".to_string());
         }
     } else {
-        outcomes.push("target_miss".to_string()); // dropped short
+        outcomes.push("target_miss".to_string());
     }
 
     if is_deformed {
         outcomes.push("barrel_deformed".to_string());
     }
 
-    // Normalize t parameter (0.0 to 1.0) over all frames
     let frame_count = frames.len();
     for i in 0..frame_count {
         frames[i].t = i as f64 / (frame_count - 1) as f64;

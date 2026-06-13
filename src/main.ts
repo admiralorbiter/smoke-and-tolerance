@@ -12,6 +12,7 @@ class LaboratoryApp {
   private currentInputs: ShotInput | null = null;
   private isInitialLoad: boolean = true;
   private hasFiredShot: boolean = false;
+  private persistentFouling: number = 0.0;
 
   private lastRenderedFrameIndex: number = 0;
   private lastRenderedFrames: any[] = [];
@@ -47,6 +48,12 @@ class LaboratoryApp {
         // Update timeline with frames
         this.timeline.setFrames(frames);
         
+        // Extract updated fouling state from final frame (if not initial dummy shot)
+        if (!this.isInitialLoad && frames.length > 0) {
+          this.persistentFouling = frames[frames.length - 1].foulingIndex;
+          this.updateFoulingMeter();
+        }
+        
         if (this.isInitialLoad) {
           this.isInitialLoad = false;
         } else {
@@ -69,7 +76,10 @@ class LaboratoryApp {
     this.renderer = new CutawayRenderer('sim-canvas');
     this.renderer.clear();
 
-    this.controls = new ControlsPanel((inputs) => this.handleFireShot(inputs));
+    this.controls = new ControlsPanel((inputs) => {
+      this.selectTab('charts');
+      this.handleFireShot(inputs);
+    });
 
     this.timeline = new Timeline(
       (frame, index, frames) => {
@@ -88,7 +98,10 @@ class LaboratoryApp {
       },
       () => {
         // Clean soot callback
+        this.persistentFouling = 0.0;
+        this.updateFoulingMeter();
         this.renderer.setSootLevel(0);
+        this.selectTab('instruments');
         // Refire current settings
         this.handleFireShot(this.controls.getInputs());
       }
@@ -99,42 +112,58 @@ class LaboratoryApp {
     const tabBtnLedger = document.getElementById('tab-btn-ledger');
     const tabBtnCharts = document.getElementById('tab-btn-charts');
 
+    tabBtnInstruments?.addEventListener('click', () => this.selectTab('instruments'));
+    tabBtnLedger?.addEventListener('click', () => this.selectTab('ledger'));
+    tabBtnCharts?.addEventListener('click', () => this.selectTab('charts'));
+
+    // Run an initial blank shot to show the static device in setup
+    this.handleInitialState();
+  }
+
+  private selectTab(activeTab: 'instruments' | 'ledger' | 'charts') {
+    const tabBtnInstruments = document.getElementById('tab-btn-instruments');
+    const tabBtnLedger = document.getElementById('tab-btn-ledger');
+    const tabBtnCharts = document.getElementById('tab-btn-charts');
+
     const tabContentInstruments = document.getElementById('chem-tab-instruments');
     const tabContentLedger = document.getElementById('chem-tab-ledger');
     const tabContentCharts = document.getElementById('chem-tab-charts');
 
-    const selectTab = (activeTab: 'instruments' | 'ledger' | 'charts') => {
-      tabBtnInstruments?.classList.toggle('active', activeTab === 'instruments');
-      tabBtnLedger?.classList.toggle('active', activeTab === 'ledger');
-      tabBtnCharts?.classList.toggle('active', activeTab === 'charts');
+    tabBtnInstruments?.classList.toggle('active', activeTab === 'instruments');
+    tabBtnLedger?.classList.toggle('active', activeTab === 'ledger');
+    tabBtnCharts?.classList.toggle('active', activeTab === 'charts');
 
-      tabContentInstruments?.classList.toggle('active', activeTab === 'instruments');
-      tabContentLedger?.classList.toggle('active', activeTab === 'ledger');
-      tabContentCharts?.classList.toggle('active', activeTab === 'charts');
+    tabContentInstruments?.classList.toggle('active', activeTab === 'instruments');
+    tabContentLedger?.classList.toggle('active', activeTab === 'ledger');
+    tabContentCharts?.classList.toggle('active', activeTab === 'charts');
 
-      if (activeTab === 'charts' && this.lastRenderedFrames.length > 0) {
-        this.renderCharts(this.lastRenderedFrames, this.lastRenderedFrameIndex);
-      }
-    };
+    if (activeTab === 'charts' && this.lastRenderedFrames.length > 0) {
+      this.renderCharts(this.lastRenderedFrames, this.lastRenderedFrameIndex);
+    }
+  }
 
-    tabBtnInstruments?.addEventListener('click', () => selectTab('instruments'));
-    tabBtnLedger?.addEventListener('click', () => selectTab('ledger'));
-    tabBtnCharts?.addEventListener('click', () => selectTab('charts'));
-
-    // Run an initial blank shot to show the static device in setup
-    this.handleInitialState();
+  private updateFoulingMeter() {
+    const bar = document.getElementById('fouling-meter-bar') as HTMLDivElement;
+    const text = document.getElementById('fouling-meter-text') as HTMLSpanElement;
+    if (bar && text) {
+      const percentage = (this.persistentFouling * 100).toFixed(0);
+      bar.style.width = `${percentage}%`;
+      text.textContent = this.persistentFouling === 0 ? 'CLEAN (0%)' : `${percentage}% FOULED`;
+    }
   }
 
   private handleInitialState() {
     // We send a 100% priming quality dummy input to show static state on load
     const initialInputs = this.controls.getInputs();
     initialInputs.primingQuality = 100.0;
+    initialInputs.persistentFouling = this.persistentFouling;
     this.currentInputs = initialInputs;
     this.worker.postMessage({ input: initialInputs });
   }
 
   private handleFireShot(inputs: ShotInput) {
     this.hasFiredShot = true;
+    inputs.persistentFouling = this.persistentFouling;
     this.currentInputs = inputs;
     this.controls.setFiringState(true);
     inputs.primingQuality = 100.0;

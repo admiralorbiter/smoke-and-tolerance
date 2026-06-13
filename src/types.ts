@@ -10,9 +10,11 @@ export interface ShotInput {
   primingQuality: number;
   seed: bigint;
   weatherProtection?: string;
+  persistentFouling: number;
+  propellantProfile: string;
 }
 
-export const FRAME_STRIDE = 16;
+export const FRAME_STRIDE = 20;
 
 export interface ShotFrame {
   t: number;
@@ -32,6 +34,9 @@ export interface ShotFrame {
   gasMass: number;
   temperature: number;
   grainRadius: number;
+  wallHeatLoss: number;
+  foulingIndex: number;
+  burnProfileCode: number;
 }
 
 export interface DiagnosisEntry {
@@ -126,6 +131,9 @@ export function parseFramesFromBuffer(
       gasMass: buffer[startIdx + 13],
       temperature: buffer[startIdx + 14],
       grainRadius: buffer[startIdx + 15],
+      wallHeatLoss: buffer[startIdx + 16],
+      foulingIndex: buffer[startIdx + 17],
+      burnProfileCode: buffer[startIdx + 18],
     });
   }
 
