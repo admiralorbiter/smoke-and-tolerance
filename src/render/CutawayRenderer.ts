@@ -13,12 +13,17 @@ export class CutawayRenderer {
   private trajectoryCtx: CanvasRenderingContext2D;
   private sootLevel: number = 0; // accumulated fouling level
   public xrayMode: boolean = false;
+  private activeFrames: ShotFrame[] = [];
 
   constructor(cutawayCanvasId: string, trajectoryCanvasId: string) {
     this.cutawayCanvas = document.getElementById(cutawayCanvasId) as HTMLCanvasElement;
     this.cutawayCtx = this.cutawayCanvas.getContext('2d') as CanvasRenderingContext2D;
     this.trajectoryCanvas = document.getElementById(trajectoryCanvasId) as HTMLCanvasElement;
     this.trajectoryCtx = this.trajectoryCanvas.getContext('2d') as CanvasRenderingContext2D;
+  }
+
+  public setFrames(frames: ShotFrame[]) {
+    this.activeFrames = frames;
   }
 
   public setXrayMode(enabled: boolean) {
@@ -1526,7 +1531,7 @@ export class CutawayRenderer {
 
   private drawTargetRange(
     frame: ShotFrame,
-    _projectileType: string,
+    projectileType: string,
     history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = [],
     inputs?: ShotInput
   ) {
@@ -1605,7 +1610,9 @@ export class CutawayRenderer {
 
     const targetX = rangeLeft + rangeWidth - 40;
     const targetCenterY = groundY - 60;
+    const targetArmor = inputs?.targetArmorType || 'silk_lamellar';
 
+    // Draw target stand legs (common to all)
     ctx.strokeStyle = '#6e5e4f';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1615,27 +1622,126 @@ export class CutawayRenderer {
     ctx.lineTo(targetX + 15, groundY);
     ctx.stroke();
 
-    ctx.fillStyle = '#dfd3c3';
-    ctx.beginPath();
-    ctx.arc(targetX, targetCenterY, 25, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#3d3228';
-    ctx.stroke();
+    ctx.save();
+    if (targetArmor === 'woven_bamboo') {
+      // Draw Woven Bamboo check patterns target
+      ctx.fillStyle = '#bfb37c'; // light bamboo tan
+      ctx.strokeStyle = '#6d5a3e';
+      ctx.lineWidth = 1.5;
+      
+      // Draw a square shield for bamboo
+      ctx.fillRect(targetX - 20, targetCenterY - 20, 40, 40);
+      ctx.strokeRect(targetX - 20, targetCenterY - 20, 40, 40);
+      
+      // Draw woven grid lines
+      ctx.strokeStyle = 'rgba(109, 90, 62, 0.4)';
+      ctx.beginPath();
+      for (let offset = -15; offset <= 15; offset += 5) {
+        ctx.moveTo(targetX + offset, targetCenterY - 20);
+        ctx.lineTo(targetX + offset, targetCenterY + 20);
+        ctx.moveTo(targetX - 20, targetCenterY + offset);
+        ctx.lineTo(targetX + 20, targetCenterY + offset);
+      }
+      ctx.stroke();
 
-    ctx.beginPath();
-    ctx.arc(targetX, targetCenterY, 15, 0, Math.PI * 2);
-    ctx.stroke();
+    } else if (targetArmor === 'silk_lamellar') {
+      // Draw Silk Lamellar (overlapping small red scales)
+      ctx.fillStyle = '#851c1c'; // crimson silk
+      ctx.strokeStyle = '#cfa86b'; // gold borders
+      ctx.lineWidth = 1.5;
+      
+      // Oval plate
+      ctx.beginPath();
+      ctx.ellipse(targetX, targetCenterY, 20, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
 
-    ctx.fillStyle = '#9e2a2b';
-    ctx.beginPath();
-    ctx.arc(targetX, targetCenterY, 5, 0, Math.PI * 2);
-    ctx.fill();
+      // Draw overlapping scales rows
+      ctx.fillStyle = '#a12b2b';
+      ctx.strokeStyle = 'rgba(207, 168, 107, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let yOffset = -15; yOffset <= 15; yOffset += 8) {
+        for (let xOffset = -12; xOffset <= 12; xOffset += 6) {
+          if (Math.abs(xOffset) < 15 && Math.abs(yOffset) < 20) {
+            ctx.rect(targetX + xOffset - 2, targetCenterY + yOffset - 3, 4, 6);
+          }
+        }
+      }
+      ctx.fill();
+      ctx.stroke();
+
+    } else if (targetArmor === 'oak_wood') {
+      // Draw Oak Planks (horizontal planks with grain)
+      ctx.fillStyle = '#b07d4e'; // wood tan
+      ctx.strokeStyle = '#5a3d22';
+      ctx.lineWidth = 2;
+      
+      // Draw circular thick shield
+      ctx.beginPath();
+      ctx.arc(targetX, targetCenterY, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw plank horizontal cut lines
+      ctx.strokeStyle = '#5a3d22';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(targetX - 24, targetCenterY - 8);
+      ctx.lineTo(targetX + 24, targetCenterY - 8);
+      ctx.moveTo(targetX - 24, targetCenterY + 8);
+      ctx.lineTo(targetX + 24, targetCenterY + 8);
+      ctx.stroke();
+
+      // Draw subtle wood grains
+      ctx.strokeStyle = 'rgba(90, 61, 34, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(targetX - 5, targetCenterY, 15, 0, Math.PI, true);
+      ctx.stroke();
+
+    } else if (targetArmor === 'wrought_iron') {
+      // Draw Wrought Iron Plate (metallic grey with rivets)
+      ctx.fillStyle = '#4e5359'; // iron grey
+      ctx.strokeStyle = '#1d1f22';
+      ctx.lineWidth = 2;
+      
+      // Heavy square plate
+      ctx.fillRect(targetX - 22, targetCenterY - 22, 44, 44);
+      ctx.strokeRect(targetX - 22, targetCenterY - 22, 44, 44);
+
+      // Draw shiny reflection line
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.beginPath();
+      ctx.moveTo(targetX - 22, targetCenterY - 22);
+      ctx.lineTo(targetX + 5, targetCenterY - 22);
+      ctx.lineTo(targetX - 10, targetCenterY + 22);
+      ctx.lineTo(targetX - 22, targetCenterY + 22);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw corner rivets
+      ctx.fillStyle = '#2d3034';
+      ctx.beginPath();
+      ctx.arc(targetX - 17, targetCenterY - 17, 2, 0, Math.PI * 2);
+      ctx.arc(targetX + 17, targetCenterY - 17, 2, 0, Math.PI * 2);
+      ctx.arc(targetX - 17, targetCenterY + 17, 2, 0, Math.PI * 2);
+      ctx.arc(targetX + 17, targetCenterY + 17, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Cache actual flight height before overloading
+    let actualImpactY = frame.projectileY;
+    const flightFramesOnly = this.activeFrames.filter(f => f.stage === 'flight');
+    if (flightFramesOnly.length > 0) {
+      actualImpactY = flightFramesOnly[flightFramesOnly.length - 1].projectileY;
+    }
 
     // --- DRAW PREVIOUS TRAJECTORY (as a faded shadow) ---
     if (history && history.length > 0) {
       history.forEach((histItem, j) => {
         const d = history.length - 1 - j;
-        // Scale opacity down for older history entries (decay effect)
         const lineOpacity = Math.max(0.04, 0.35 * Math.pow(0.5, d));
         const dotOpacity = Math.max(0.08, 0.60 * Math.pow(0.5, d));
 
@@ -1644,15 +1750,13 @@ export class CutawayRenderer {
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 4]);
 
-        const prevFlightFrames = histItem.frames.filter(
-          f => f.stage === 'flight' || f.stage === 'impact' || f.stage === 'aftermath'
-        );
+        const prevFlightOnly = histItem.frames.filter(f => f.stage === 'flight');
 
-        if (prevFlightFrames.length > 0) {
+        if (prevFlightOnly.length > 0) {
           ctx.beginPath();
           ctx.moveTo(rangeLeft, shooterHeightY);
           
-          prevFlightFrames.forEach(f => {
+          prevFlightOnly.forEach(f => {
             const prog = Math.min(1.0, f.projectileX / 35.0);
             const px = rangeLeft + (prog * (rangeWidth - 40));
             const py = groundY - (f.projectileY * 40.0);
@@ -1661,7 +1765,7 @@ export class CutawayRenderer {
           ctx.stroke();
 
           // Draw faded previous impact point
-          const lastPrevFrame = prevFlightFrames[prevFlightFrames.length - 1];
+          const lastPrevFrame = prevFlightOnly[prevFlightOnly.length - 1];
           const lastProg = Math.min(1.0, lastPrevFrame.projectileX / 35.0);
           const lastPx = rangeLeft + (lastProg * (rangeWidth - 40));
           const lastPy = groundY - (lastPrevFrame.projectileY * 40.0);
@@ -1675,53 +1779,122 @@ export class CutawayRenderer {
       });
     }
 
-    if (frame.stage === 'flight' || frame.stage === 'impact') {
+    // --- DRAW CURRENT FLIGHT TRAJECTORY ---
+    if (frame.stage === 'flight' || frame.stage === 'impact' || frame.stage === 'aftermath') {
       ctx.save();
       ctx.strokeStyle = 'rgba(207, 168, 107, 0.4)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([3, 3]);
       
-      const flightProgress = Math.min(1.0, frame.projectileX / 35.0);
-      const currentFlightX = rangeLeft + (flightProgress * (rangeWidth - 40));
-      const currentFlightY = groundY - (frame.projectileY * 40.0);
-
-      ctx.beginPath();
-      ctx.moveTo(rangeLeft, shooterHeightY);
-      ctx.quadraticCurveTo(
-        (rangeLeft + currentFlightX) / 2, 
-        Math.min(shooterHeightY, currentFlightY) - 10,
-        currentFlightX, 
-        currentFlightY
+      const currentFlightFrames = this.activeFrames.filter(
+        f => f.stage === 'flight' && f.timeMs <= frame.timeMs
       );
-      ctx.stroke();
 
-      ctx.fillStyle = '#646870';
-      ctx.beginPath();
-      ctx.arc(currentFlightX, currentFlightY, 3, 0, Math.PI * 2);
-      ctx.fill();
+      if (currentFlightFrames.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(rangeLeft, shooterHeightY);
+        currentFlightFrames.forEach(f => {
+          const prog = Math.min(1.0, f.projectileX / 35.0);
+          const px = rangeLeft + (prog * (rangeWidth - 40));
+          const py = groundY - (f.projectileY * 40.0);
+          ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+
+        // Draw dot at current projectile position
+        const tipFrame = currentFlightFrames[currentFlightFrames.length - 1];
+        const tipProg = Math.min(1.0, tipFrame.projectileX / 35.0);
+        const tipPx = rangeLeft + (tipProg * (rangeWidth - 40));
+        const tipPy = groundY - (tipFrame.projectileY * 40.0);
+
+        ctx.fillStyle = '#646870';
+        ctx.beginPath();
+        ctx.arc(tipPx, tipPy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (frame.aimOffset !== 0.0) {
         ctx.fillStyle = '#6e5e4f';
         ctx.font = '10px Share Tech Mono, monospace';
+        const flightProgress = Math.min(1.0, frame.projectileX / 35.0);
+        const currentFlightX = rangeLeft + (flightProgress * (rangeWidth - 40));
+        const currentFlightY = groundY - (frame.stage === 'flight' ? frame.projectileY : actualImpactY) * 40.0;
         ctx.fillText(`Drift: ${frame.aimOffset.toFixed(1)}°`, currentFlightX - 20, currentFlightY - 10);
       }
 
       ctx.restore();
     }
 
+    // --- DRAW IMPACT AND TARGET DESTRUCTION DEBRIS ---
     if (frame.stage === 'impact' || frame.stage === 'aftermath') {
       const finalProgress = Math.min(1.0, frame.projectileX / 35.0);
       const impactX = rangeLeft + (finalProgress * (rangeWidth - 40));
-      const impactY = groundY - (frame.projectileY * 40.0);
+      const impactY = groundY - (actualImpactY * 40.0);
 
-      ctx.fillStyle = '#d94e34';
-      ctx.beginPath();
-      ctx.arc(impactX, impactY, 4, 0, Math.PI * 2);
-      ctx.fill();
+      const isHit = impactX >= targetX - 10 && Math.abs(impactY - targetCenterY) < 30;
+
+      ctx.save();
+      if (isHit) {
+        // Draw target fracture cracks
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (targetArmor === 'wrought_iron') {
+          ctx.arc(impactX, impactY, 5, 0, Math.PI * 2);
+          ctx.arc(impactX, impactY, 12, 0, Math.PI * 2);
+        } else {
+          for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+            ctx.moveTo(impactX, impactY);
+            ctx.lineTo(impactX + Math.cos(angle) * 14, impactY + Math.sin(angle) * 14);
+          }
+        }
+        ctx.stroke();
+
+        // Draw projectile deformation or splinters
+        if (projectileType === 'rough_stone' || projectileType === 'pebbles') {
+          // Brittle stone fracture
+          ctx.fillStyle = '#6d655d';
+          ctx.beginPath();
+          for (let k = 0; k < 12; k++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 3 + Math.random() * 15;
+            const size = 1.5 + Math.random() * 2.5;
+            ctx.rect(impactX + Math.cos(angle) * dist - size/2, impactY + Math.sin(angle) * dist - size/2, size, size);
+          }
+          ctx.fill();
+        } else {
+          // Lead malleable deformation
+          ctx.fillStyle = '#a3a8b0';
+          ctx.strokeStyle = '#4e5359';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(impactX, impactY, 6, 3, Math.PI / 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Draw wood/bamboo splinters
+        if (targetArmor === 'oak_wood' || targetArmor === 'woven_bamboo') {
+          ctx.fillStyle = targetArmor === 'oak_wood' ? '#8e5d34' : '#bfb37c';
+          ctx.beginPath();
+          for (let k = 0; k < 8; k++) {
+            const angle = Math.PI/2 + (Math.random() - 0.5) * Math.PI;
+            const dist = 4 + Math.random() * 14;
+            ctx.rect(impactX + Math.cos(angle) * dist, impactY + Math.sin(angle) * dist, 1, 4);
+          }
+          ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = '#555';
+        ctx.beginPath();
+        ctx.arc(impactX, impactY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
 
       ctx.fillStyle = '#cfa86b';
       ctx.font = 'bold 11px Cinzel, serif';
-      if (impactX >= targetX - 5 && Math.abs(impactY - targetCenterY) < 12) {
+      if (isHit) {
         ctx.fillStyle = '#8ac926';
         ctx.fillText('HIT!', targetX - 12, targetCenterY - 35);
       } else {

@@ -25,6 +25,7 @@ export interface ShotInput {
   alchemicalMix?: AlchemicalMix;
   persistentFatigue: number;
   flawSeed: number;
+  targetArmorType?: string;
 }
 
 export const FRAME_STRIDE = 20;
@@ -358,3 +359,95 @@ export const ERA_REGISTRY: Record<string, EraConfig> = {
     }
   }
 };
+
+export function validateEraChallenge(eraId: string, result: ShotResult): { success: boolean; message: string } {
+  const finalFrame = result.frames[result.frames.length - 1];
+  const peakVelocity = result.frames.reduce((max, f) => Math.max(max, f.projectileVelocity), 0);
+  const outcomes = result.outcomes || [];
+
+  switch (eraId) {
+    case 'strange_fire': {
+      const isBamboo = result.input.barrelMaterial === 'bamboo';
+      const isUneven = result.input.propellantProfile === 'uneven';
+      const noRupture = !outcomes.includes('barrel_failure');
+      const burnDuration = finalFrame ? finalFrame.timeMs : 0;
+      if (!isBamboo || !isUneven) {
+        return { success: false, message: 'Must use Bamboo barrel and Uneven Serpentine.' };
+      }
+      if (!noRupture) {
+        return { success: false, message: 'Catastrophic barrel split along fibers!' };
+      }
+      if (burnDuration < 8.0) {
+        return { success: false, message: `Burn duration was only ${burnDuration.toFixed(1)}ms (need >= 8.0ms).` };
+      }
+      return { success: true, message: 'Challenge Completed! Alchemical combustion stable.' };
+    }
+    case 'fire_delivered': {
+      const isBamboo = result.input.barrelMaterial === 'bamboo';
+      const isArrow = result.input.projectileType === 'lead_arrow';
+      const noRupture = !outcomes.includes('barrel_failure');
+      if (!isBamboo || !isArrow) {
+        return { success: false, message: 'Must use Bamboo barrel and Lead Arrow-Bolt.' };
+      }
+      if (!noRupture) {
+        return { success: false, message: 'Guide tube split under pressure!' };
+      }
+      if (peakVelocity < 40.0) {
+        return { success: false, message: `Muzzle velocity was only ${peakVelocity.toFixed(1)} m/s (need >= 40 m/s).` };
+      }
+      return { success: true, message: 'Challenge Completed! Arrow launched successfully.' };
+    }
+    case 'directional_blast': {
+      const isIron = result.input.barrelMaterial === 'wrought_iron';
+      const isPebbles = result.input.projectileType === 'pebbles';
+      const noRupture = !outcomes.includes('barrel_failure');
+      if (!isIron || !isPebbles) {
+        return { success: false, message: 'Must use Wrought Iron barrel and Pebble Spray.' };
+      }
+      if (!noRupture) {
+        return { success: false, message: 'Wrought iron weld seam failed!' };
+      }
+      if (peakVelocity < 30.0) {
+        return { success: false, message: `Muzzle velocity was only ${peakVelocity.toFixed(1)} m/s (need >= 30 m/s).` };
+      }
+      return { success: true, message: 'Challenge Completed! Pebbles scattered with high velocity.' };
+    }
+    case 'hand_cannon': {
+      const isBronze = result.input.barrelMaterial === 'cast_bronze';
+      const isLeadBall = result.input.projectileType === 'lead_ball';
+      const noRupture = !outcomes.includes('barrel_failure');
+      const noDeform = !outcomes.includes('barrel_deformed');
+      if (!isBronze || !isLeadBall) {
+        return { success: false, message: 'Must use Cast Bronze barrel and Lead Ball.' };
+      }
+      if (!noRupture) {
+        return { success: false, message: 'Bronze barrel exploded!' };
+      }
+      if (!noDeform) {
+        return { success: false, message: 'Bronze barrel deformed under excessive hoop stress!' };
+      }
+      if (peakVelocity < 90.0) {
+        return { success: false, message: `Muzzle velocity was only ${peakVelocity.toFixed(1)} m/s (need >= 90 m/s).` };
+      }
+      return { success: true, message: 'Challenge Completed! Bullet hit target at high velocity.' };
+    }
+    case 'early_cannon': {
+      const isBronze = result.input.barrelMaterial === 'cast_bronze';
+      const isStone = result.input.projectileType === 'rough_stone';
+      const isClay = result.input.sealingQuality === 'clay';
+      const noRupture = !outcomes.includes('barrel_failure');
+      if (!isBronze || !isStone || !isClay) {
+        return { success: false, message: 'Must use Cast Bronze bombard, Rough Stone, and Clay seal.' };
+      }
+      if (!noRupture) {
+        return { success: false, message: 'Bombard burst under siege pressure!' };
+      }
+      if (peakVelocity < 110.0) {
+        return { success: false, message: `Muzzle velocity was only ${peakVelocity.toFixed(1)} m/s (need >= 110 m/s).` };
+      }
+      return { success: true, message: 'Challenge Completed! Wall breached.' };
+    }
+    default:
+      return { success: true, message: 'Sandbox free testing.' };
+  }
+}

@@ -11,6 +11,9 @@ export class AudioManager {
 
   private sizzleNode: AudioScheduledSourceNode | null = null;
   private sizzleGain: GainNode | null = null;
+  private matchSizzleNode: AudioBufferSourceNode | null = null;
+  private matchSizzleGain: GainNode | null = null;
+  private matchSizzleLfo: OscillatorNode | null = null;
 
   private leakageNode: AudioScheduledSourceNode | null = null;
   private leakageGain: GainNode | null = null;
@@ -770,6 +773,72 @@ export class AudioManager {
     sweep.stop(time + 0.52);
   }
 
+  public playAlchemicalSeal() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    // 1. Hot Wax Sizzle (highpass noise sweep)
+    if (this.noiseBuffer) {
+      const sizzleSource = this.ctx.createBufferSource();
+      sizzleSource.buffer = this.noiseBuffer;
+      const sizzleFilter = this.ctx.createBiquadFilter();
+      sizzleFilter.type = 'highpass';
+      sizzleFilter.frequency.setValueAtTime(2500, time);
+      const sizzleGain = this.ctx.createGain();
+      sizzleGain.gain.setValueAtTime(0.015, time);
+      sizzleGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.2);
+      sizzleSource.connect(sizzleFilter);
+      sizzleFilter.connect(sizzleGain);
+      sizzleGain.connect(this.ctx.destination);
+      sizzleSource.start(time);
+      sizzleSource.stop(time + 0.2);
+    }
+
+    // 2. Deep Wax Thud (low-frequency sine sweep)
+    const thud = this.ctx.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(120, time + 0.1);
+    thud.frequency.exponentialRampToValueAtTime(45, time + 0.35);
+    const thudGain = this.ctx.createGain();
+    thudGain.gain.setValueAtTime(0.001, time);
+    thudGain.gain.linearRampToValueAtTime(0.18, time + 0.12);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.45);
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(time + 0.1);
+    thud.stop(time + 0.46);
+
+    // 3. Resonant Alchemical Chime (Harmonic frequencies ringing out)
+    // Frequencies: 220Hz (A3), 330Hz (E4), 440Hz (A4), 554Hz (C#5) - A Major triad
+    const frequencies = [220, 330, 440, 554];
+    frequencies.forEach((freq, index) => {
+      const osc = this.ctx!.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time + 0.15);
+      
+      const oscGain = this.ctx!.createGain();
+      const volume = 0.025 / (index + 1);
+      oscGain.gain.setValueAtTime(0.001, time);
+      oscGain.gain.linearRampToValueAtTime(volume, time + 0.25);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, time + 1.8);
+
+      const lfo = this.ctx!.createOscillator();
+      lfo.frequency.value = 5.0; // 5Hz vibrato
+      const lfoGain = this.ctx!.createGain();
+      lfoGain.gain.value = 2.0; // +/- 2Hz frequency variation
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      lfo.start(time + 0.15);
+      lfo.stop(time + 1.8);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx!.destination);
+      osc.start(time + 0.15);
+      osc.stop(time + 1.8);
+    });
+  }
+
   // --- Stop & Cleanup Helpers ---
 
   public stopContinuousSounds() {
@@ -824,6 +893,76 @@ export class AudioManager {
       this.flightNode = null;
     }
     this.flightGain = null;
+  }
+
+  public playIgnitionHold(active: boolean, damp: boolean = false) {
+    this.initContext();
+    if (!this.ctx) return;
+
+    if (active) {
+      if (this.matchSizzleNode) return;
+
+      const bufferSize = this.ctx.sampleRate * 2;
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      this.matchSizzleNode = this.ctx.createBufferSource();
+      this.matchSizzleNode.buffer = noiseBuffer;
+      this.matchSizzleNode.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(damp ? 1800 : 3500, this.ctx.currentTime);
+
+      this.matchSizzleGain = this.ctx.createGain();
+      this.matchSizzleGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+      this.matchSizzleGain.gain.linearRampToValueAtTime(damp ? 0.04 : 0.07, this.ctx.currentTime + 0.3);
+
+      this.matchSizzleNode.connect(filter);
+      filter.connect(this.matchSizzleGain);
+      this.matchSizzleGain.connect(this.ctx.destination);
+
+      if (damp) {
+        // Wet sizzle LFO modulation at 12Hz
+        this.matchSizzleLfo = this.ctx.createOscillator();
+        this.matchSizzleLfo.frequency.setValueAtTime(12, this.ctx.currentTime);
+        const lfoGain = this.ctx.createGain();
+        lfoGain.gain.setValueAtTime(0.018, this.ctx.currentTime);
+        this.matchSizzleLfo.connect(lfoGain);
+        lfoGain.connect(this.matchSizzleGain.gain);
+        this.matchSizzleLfo.start();
+      }
+
+      this.matchSizzleNode.start();
+    } else {
+      if (this.matchSizzleNode && this.matchSizzleGain) {
+        const node = this.matchSizzleNode;
+        const gain = this.matchSizzleGain;
+        gain.gain.cancelScheduledValues(this.ctx.currentTime);
+        gain.gain.setValueAtTime(gain.gain.value, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.15);
+        
+        if (this.matchLfoStop) {
+          try { this.matchLfoStop(); } catch (e) {}
+        }
+
+        setTimeout(() => {
+          try { node.stop(); } catch (e) {}
+        }, 200);
+        this.matchSizzleNode = null;
+        this.matchSizzleGain = null;
+      }
+    }
+  }
+
+  private matchLfoStop() {
+    if (this.matchSizzleLfo) {
+      try { this.matchSizzleLfo.stop(); } catch (e) {}
+      this.matchSizzleLfo = null;
+    }
   }
 
   // Helper distortion generator

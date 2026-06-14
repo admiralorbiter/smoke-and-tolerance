@@ -68,7 +68,30 @@
               <input type="checkbox" id="chk-xray-mode" style="cursor: pointer; accent-color: #ff9f1c;"> 🔍 X-Ray View
             </label>
           </div>
-          <canvas id="sim-cutaway-canvas" width="800" height="450"></canvas>
+          <div class="canvas-relative-container" style="position: relative; overflow: hidden; background: #080605; border-radius: 4px; border: 1px solid var(--border-ink);">
+            <canvas id="sim-cutaway-canvas" width="800" height="450" style="display: block; width: 100%; height: auto;"></canvas>
+            
+            <!-- Match-Ignition Phase Interactive Overlay -->
+            <div id="ignition-overlay" class="ignition-overlay" style="display: none;">
+              <div class="aim-reticle-container">
+                <div id="aim-reticle" class="aim-reticle"></div>
+              </div>
+              <div id="spark-indicator" class="spark-indicator"></div>
+              <div id="rain-splash-overlay" class="rain-splash-overlay"></div>
+              <div class="ignition-instructions-box">
+                <div class="instruction-title">🔥 INTERACTIVE MATCH IGNITION</div>
+                <div class="instruction-subtitle">Hold left click (or touch) to heat the touch-hole with the matchcord. Release early to fire with current aim sway!</div>
+                <div class="stance-indicator-bar">
+                  Stance: <span id="ignition-stance-name">Normal</span> 
+                  | Sway: <span id="ignition-sway-level">Standard</span>
+                  | Damp Risk: <span id="ignition-damp-risk">0%</span>
+                </div>
+                <div class="ignition-progress-container">
+                  <div id="ignition-progress-bar" class="ignition-progress-bar"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- TIMELINE & PLAYBACK CONTROLS -->
@@ -295,7 +318,16 @@
           
           <!-- Tab 4: Codex -->
           <div id="chem-tab-codex" class="chem-tab-content">
-            <div class="codex-container">
+            <div class="codex-container" style="position: relative;">
+              <!-- Wax Victory Seal Overlay -->
+              <div id="codex-victory-overlay" class="codex-victory-overlay" style="display: none;">
+                <div class="victory-seal">
+                  <div class="seal-inner-circle">
+                    <span class="seal-symbol">🜔</span>
+                    <span class="seal-text">RESOLVED</span>
+                  </div>
+                </div>
+              </div>
               <div class="codex-header-block">
                 <h2 id="codex-title">IV. The Difficult Shot (Late 1200s)</h2>
                 <div class="codex-illustration-container">
@@ -405,6 +437,16 @@
               <option value="none">None (High gas escape clearance)</option>
               <option value="tow" selected>Tow Packing (Coarse flax fibers)</option>
               <option value="clay">Clay Plug (Airtight seal, high friction)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="select-target">Target Material (35m)</label>
+            <select id="select-target">
+              <option value="silk_lamellar" selected>Silk Lamellar (Malleable layers, high shock absorption)</option>
+              <option value="woven_bamboo">Woven Bamboo (Fibrous, light defense)</option>
+              <option value="oak_wood">Oak Planks (Thick timber, high yield resilience)</option>
+              <option value="wrought_iron">Wrought Iron Plate (High density, brittle-ductile threshold)</option>
             </select>
           </div>
 
@@ -698,6 +740,23 @@
       </footer>
     </div>
   </div>
+
+  <!-- Alchemical SVG Filters -->
+  <svg style="display: none;">
+    <defs>
+      <!-- Parchment grain texture filter -->
+      <filter id="parchment-grain" x="0%" y="0%" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise" />
+        <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.07 0" />
+        <feComposite operator="in" in2="SourceGraphic" />
+      </filter>
+      <!-- Burnt Edge displacement filter -->
+      <filter id="burnt-edge-displacement" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="6" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

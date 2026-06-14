@@ -32,6 +32,7 @@ pub struct ShotInput {
     pub charcoal_source: Option<String>,
     pub saltpeter_purity: Option<f64>,
     pub weather_protection: Option<String>,
+    pub target_armor_type: Option<String>,
 }
 
 pub const STRIDE_COUNT: usize = 20;
@@ -178,6 +179,7 @@ mod tests {
             charcoal_source: None,
             saltpeter_purity: None,
             weather_protection: None,
+            target_armor_type: None,
         };
 
         let result = run_simulation(input);
@@ -209,6 +211,7 @@ mod tests {
             charcoal_source: None,
             saltpeter_purity: None,
             weather_protection: None,
+            target_armor_type: None,
         };
 
         let result = run_simulation(input);
@@ -239,6 +242,7 @@ mod tests {
             charcoal_source: None,
             saltpeter_purity: None,
             weather_protection: None,
+            target_armor_type: None,
         };
         let result_clean = run_simulation(input_clean.clone());
         
@@ -278,6 +282,7 @@ mod tests {
                 charcoal_source: None,
                 saltpeter_purity: None,
                 weather_protection: Some("none".to_string()),
+                target_armor_type: None,
             };
 
             let result = run_simulation(input);
@@ -315,6 +320,7 @@ mod tests {
                 charcoal_source: None,
                 saltpeter_purity: None,
                 weather_protection: Some("parchment".to_string()),
+                target_armor_type: None,
             };
 
             let result = run_simulation(input);
@@ -352,6 +358,7 @@ mod tests {
             charcoal_source: None,
             saltpeter_purity: None,
             weather_protection: None,
+            target_armor_type: None,
         };
 
         // First shot (0 fatigue)
@@ -367,6 +374,324 @@ mod tests {
         let fatigue2 = result2.frames.last().unwrap().barrel_fatigue;
         assert_eq!(fatigue2, 1.0, "Fatigue should be clamped to 1.0");
         assert!(result2.outcomes.contains(&"barrel_failure".to_string()), "Fatigued barrel must rupture");
+    }
+
+    #[test]
+    fn test_era1_challenge_victory() {
+        let input = ShotInput {
+            barrel_material: "bamboo".to_string(),
+            propellant_type: "meal".to_string(),
+            refinement_level: 45.0,
+            projectile_type: "none".to_string(),
+            sealing_quality: "none".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "uneven".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: None,
+        };
+        let result = run_simulation(input);
+        let final_time = result.frames.last().unwrap().time_ms;
+        assert!(final_time >= 8.0, "Era 1 burn duration must be >= 8ms");
+        assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
+    }
+
+    #[test]
+    fn test_era1_challenge_fail_by_split() {
+        let input = ShotInput {
+            barrel_material: "bamboo".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 75.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "clay".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: None,
+        };
+        let result = run_simulation(input);
+        assert!(result.outcomes.contains(&"barrel_failure".to_string()), "Bamboo with corned powder and clay wadding must rupture");
+    }
+
+    #[test]
+    fn test_era2_challenge_victory() {
+        let input = ShotInput {
+            barrel_material: "bamboo".to_string(),
+            propellant_type: "meal".to_string(),
+            refinement_level: 55.0,
+            projectile_type: "lead_arrow".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "uneven".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: None,
+        };
+        let result = run_simulation(input);
+        let max_vel = result.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        assert!(max_vel >= 40.0, "Era 2 velocity is {}, expected >= 40 m/s", max_vel);
+        assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
+    }
+
+    #[test]
+    fn test_era3_challenge_victory() {
+        let input = ShotInput {
+            barrel_material: "wrought_iron".to_string(),
+            propellant_type: "meal".to_string(),
+            refinement_level: 65.0,
+            projectile_type: "pebbles".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "uneven".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: Some("wrought_iron".to_string()),
+        };
+        let result = run_simulation(input);
+        let max_vel = result.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        assert!(max_vel >= 30.0, "Era 3 velocity is {}, expected >= 30 m/s", max_vel);
+        assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
+    }
+
+    #[test]
+    fn test_era4_challenge_victory() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: Some("silk_lamellar".to_string()),
+        };
+        let result = run_simulation(input);
+        let max_vel = result.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        assert!(max_vel >= 90.0, "Era 4 velocity is {}, expected >= 90 m/s", max_vel);
+        assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
+        assert!(!result.outcomes.contains(&"barrel_deformed".to_string()));
+    }
+
+    #[test]
+    fn test_era4_challenge_fail_by_deformation() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 100.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "clay".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: None,
+        };
+        let result = run_simulation(input);
+        assert!(result.outcomes.contains(&"barrel_deformed".to_string()), "Cast Bronze with clay wadding and 100% refinement must deform");
+    }
+
+    #[test]
+    fn test_era5_challenge_victory() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "rough_stone".to_string(),
+            sealing_quality: "clay".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: Some("oak_wood".to_string()),
+        };
+        let result = run_simulation(input);
+        let max_vel = result.frames.iter().map(|f| f.projectile_velocity).fold(0.0, f64::max);
+        assert!(max_vel >= 110.0, "Era 5 velocity is {}, expected >= 110 m/s", max_vel);
+        assert!(!result.outcomes.contains(&"barrel_failure".to_string()));
+    }
+
+    #[test]
+    fn test_poncelet_lead_ball_vs_iron() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: Some("wrought_iron".to_string()),
+        };
+        let result = run_simulation(input);
+        // Ensure final frame y representing penetration is computed and non-zero
+        let final_frame = result.frames.last().unwrap();
+        assert!(final_frame.projectile_y > 0.0, "Penetration depth must be calculated");
+    }
+
+    #[test]
+    fn test_poncelet_stone_fracture() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "rough_stone".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+            target_armor_type: Some("wrought_iron".to_string()),
+        };
+        let result = run_simulation(input);
+        let final_frame = result.frames.last().unwrap();
+        assert!(final_frame.projectile_y > 0.0, "Fracture penetration must be calculated");
+    }
+
+    #[test]
+    fn test_stoichiometry_byproduct_allocation() {
+        let input = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "meal".to_string(),
+            refinement_level: 85.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "none".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 5.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: Some(true),
+            saltpeter_ratio: Some(50.0),
+            charcoal_ratio: Some(40.0),
+            sulfur_ratio: Some(10.0),
+            charcoal_source: Some("oak".to_string()),
+            saltpeter_purity: Some(100.0),
+            weather_protection: None,
+            target_armor_type: None,
+        };
+        let result = run_simulation(input);
+        // Verify that carbon soot warning is generated in diagnosis card
+        let has_warning = result.diagnosis.iter().any(|d| d.explanation.contains("soot") || d.explanation.contains("carbon") || d.title.contains("Carbo"));
+        if !has_warning {
+            panic!("Diagnosis entries found: {:?}", result.diagnosis);
+        }
     }
 }
 

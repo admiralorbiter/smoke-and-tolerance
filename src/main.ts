@@ -1,4 +1,4 @@
-import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY, AlchemicalMix } from './types';
+import { ShotInput, ShotResultWasm, parseFramesFromBuffer, ShotFrame, ERA_REGISTRY, AlchemicalMix, validateEraChallenge } from './types';
 import { AudioManager } from './audio/AudioManager';
 import { CutawayRenderer } from './render/CutawayRenderer';
 import { ControlsPanel } from './ui/ControlsPanel';
@@ -38,6 +38,19 @@ class LaboratoryApp {
   private lastRenderedFrameIndex: number = 0;
   private lastRenderedFrames: any[] = [];
 
+  // Interactive match-ignition minigame state
+  private isIgniting: boolean = false;
+  private isHoldingMatch: boolean = false;
+  private ignitionHoldDuration: number = 0; // ms
+  private ignitionAngleT: number = 0;
+  private ignitionTargetDurationMs: number = 2000;
+  private ignitionInputs: ShotInput | null = null;
+  private ignitionPhi: number[] = [0, 0, 0, 0, 0, 0];
+  private lastTimestamp: number = 0;
+
+  // Progression state
+  private unlockedEras: Set<string> = new Set(['strange_fire', 'sandbox']);
+  private completedChallenges: Set<string> = new Set();
 
   constructor() {
     this.initApp();
@@ -70,6 +83,47 @@ class LaboratoryApp {
 
         // Update timeline with frames
         this.timeline.setFrames(frames);
+        
+        // Cache frames in renderer
+        this.renderer.setFrames(frames);
+
+        // Challenge Validation
+        if (!this.isInitialLoad && !this.isEraSwitchLoad && frames.length > 0) {
+          const shotResult = {
+            input: this.currentInputs!,
+            frames,
+            outcomes: wasmResult.outcomes,
+            diagnosis: wasmResult.diagnosis,
+            summary: wasmResult.summary
+          };
+          const validation = validateEraChallenge(this.activeEra, shotResult);
+          
+          if (validation.success) {
+            if (this.activeEra !== 'sandbox') {
+              if (!this.completedChallenges.has(this.activeEra)) {
+                this.completedChallenges.add(this.activeEra);
+                const nextEra = this.getNextEra(this.activeEra);
+                if (nextEra) {
+                  this.unlockedEras.add(nextEra);
+                }
+                this.saveProgression();
+                this.updateEraButtonsLockedState();
+
+                // Play seal sound
+                AudioManager.getInstance().playAlchemicalSeal();
+                
+                // Reveal victory stamp overlay
+                const overlay = document.getElementById('codex-victory-overlay');
+                if (overlay) {
+                  overlay.style.display = 'flex';
+                }
+
+                // Switch to codex tab to show stamp
+                this.selectTab('codex');
+              }
+            }
+          }
+        }
         
         // Extract updated fouling and fatigue state from final frame (if not initial dummy shot)
         if (!this.isInitialLoad && frames.length > 0) {
@@ -119,8 +173,7 @@ class LaboratoryApp {
     this.comparisonPanel = new ComparisonPanel();
 
     this.controls = new ControlsPanel((inputs) => {
-      this.selectTab('charts');
-      this.handleFireShot(inputs);
+      this.startIgnitionMinigame(inputs);
     });
 
     // Instantiate Alchemical Synthesis Lab
@@ -148,7 +201,7 @@ class LaboratoryApp {
       this.shotHistory = [];
       this.comparisonPanel.hide();
       
-      this.handleFireShot(this.controls.getInputs());
+      this.startIgnitionMinigame(this.controls.getInputs());
     });
 
     this.timeline = new Timeline(
@@ -205,12 +258,33 @@ class LaboratoryApp {
     // 4. Era Navigation Event Listeners
     const eraButtons = document.querySelectorAll('.era-btn');
     eraButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e: Event) => {
+        const mouseEvent = e as MouseEvent;
         const eraId = btn.getAttribute('data-era');
         if (eraId && ERA_REGISTRY[eraId]) {
+          const isLocked = btn.classList.contains('locked');
+          const bypass = mouseEvent.ctrlKey;
+          if (isLocked && !bypass) {
+            console.log(`Era ${eraId} is locked. Hold Ctrl key to bypass.`);
+            return;
+          }
           this.switchEra(eraId);
         }
       });
+    });
+
+    const timelineHeader = document.querySelector('.era-selector-container');
+    timelineHeader?.addEventListener('click', (e: Event) => {
+      const mouseEvent = e as MouseEvent;
+      if (mouseEvent.ctrlKey) {
+        // Unlock all eras!
+        for (const eraId of Object.keys(ERA_REGISTRY)) {
+          this.unlockedEras.add(eraId);
+        }
+        this.saveProgression();
+        this.updateEraButtonsLockedState();
+        console.log('Developer bypass: All eras unlocked.');
+      }
     });
 
     // 5. Alchemical Workbench Toggle Listeners
@@ -294,10 +368,33 @@ class LaboratoryApp {
 
     // Initialize with hand_cannon defaults
     this.activeEra = 'hand_cannon';
+    
+    this.loadProgression();
+
+    if (!this.unlockedEras.has(this.activeEra)) {
+      this.activeEra = 'strange_fire';
+    }
+
+    // Toggle active button manually for the startup era
+    const eraButtonsList = document.querySelectorAll('.era-btn');
+    eraButtonsList.forEach(btn => {
+      const eraId = btn.getAttribute('data-era');
+      btn.classList.toggle('active', eraId === this.activeEra);
+    });
+
     const activeConfig = ERA_REGISTRY[this.activeEra];
     this.controls.applyEraRestrictions(activeConfig);
     this.updateCodexPanel(activeConfig);
     this.updateFatigueMeter();
+
+    const overlay = document.getElementById('codex-victory-overlay');
+    if (overlay) {
+      if (this.completedChallenges.has(this.activeEra)) {
+        overlay.style.display = 'flex';
+      } else {
+        overlay.style.display = 'none';
+      }
+    }
 
     // Bind interactive lens tooltips mouseover
     const cutawayCanvas = document.getElementById('sim-cutaway-canvas') as HTMLCanvasElement;
@@ -875,6 +972,16 @@ class LaboratoryApp {
     // Update Codex description
     this.updateCodexPanel(config);
 
+    // Update victory seal overlay status
+    const overlay = document.getElementById('codex-victory-overlay');
+    if (overlay) {
+      if (this.completedChallenges.has(eraId)) {
+        overlay.style.display = 'flex';
+      } else {
+        overlay.style.display = 'none';
+      }
+    }
+
     // Purge Run History (Cassandra's Decoupling Rule)
     this.shotHistory = [];
     this.comparisonPanel.hide();
@@ -1012,7 +1119,18 @@ class LaboratoryApp {
   }
 
   private startAnimationLoop() {
-    const loop = () => {
+    const loop = (timestamp: number) => {
+      if (!this.lastTimestamp) {
+        this.lastTimestamp = timestamp;
+      }
+      const dt = timestamp - this.lastTimestamp;
+      this.lastTimestamp = timestamp;
+
+      // Update minigame if active
+      if (this.isIgniting && this.ignitionInputs) {
+        this.updateMinigame(dt);
+      }
+
       if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
         const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
         if (frame) {
@@ -1052,6 +1170,308 @@ class LaboratoryApp {
     } else if (stage === 'pressure' || stage === 'movement' || stage === 'flight') {
       cutawayCard.classList.add('glow-pressure');
       trajectoryCard.classList.add('glow-pressure');
+    }
+  }
+
+  private getNextEra(eraId: string): string | null {
+    const sequence = ['strange_fire', 'fire_delivered', 'directional_blast', 'hand_cannon', 'early_cannon'];
+    const idx = sequence.indexOf(eraId);
+    if (idx !== -1 && idx < sequence.length - 1) {
+      return sequence[idx + 1];
+    }
+    return null;
+  }
+
+  private loadProgression() {
+    const savedUnlocked = localStorage.getItem('smoke_tolerance_unlocked_eras');
+    if (savedUnlocked) {
+      try {
+        const arr = JSON.parse(savedUnlocked);
+        if (Array.isArray(arr)) {
+          this.unlockedEras = new Set([...arr, 'strange_fire', 'sandbox']);
+        }
+      } catch (e) {}
+    } else {
+      this.unlockedEras = new Set(['strange_fire', 'sandbox']);
+    }
+
+    const savedCompleted = localStorage.getItem('smoke_tolerance_completed_challenges');
+    if (savedCompleted) {
+      try {
+        const arr = JSON.parse(savedCompleted);
+        if (Array.isArray(arr)) {
+          this.completedChallenges = new Set(arr);
+        }
+      } catch (e) {}
+    }
+    
+    this.updateEraButtonsLockedState();
+  }
+
+  private saveProgression() {
+    localStorage.setItem('smoke_tolerance_unlocked_eras', JSON.stringify(Array.from(this.unlockedEras)));
+    localStorage.setItem('smoke_tolerance_completed_challenges', JSON.stringify(Array.from(this.completedChallenges)));
+  }
+
+  private updateEraButtonsLockedState() {
+    const eraButtons = document.querySelectorAll('.era-btn');
+    eraButtons.forEach(btn => {
+      const eraId = btn.getAttribute('data-era');
+      if (eraId) {
+        const isUnlocked = this.unlockedEras.has(eraId);
+        btn.classList.toggle('locked', !isUnlocked);
+      }
+    });
+  }
+
+  private getFriendlyProtectionName(key: string): string {
+    const map: Record<string, string> = {
+      none: 'None',
+      parchment: 'Oiled Parchment',
+      pan_shield: 'Pan Shield',
+      operator_cowl: 'Operator Cowl'
+    };
+    return map[key] || key;
+  }
+
+  private startIgnitionMinigame(inputs: ShotInput) {
+    this.timeline.pause();
+    this.ignitionInputs = inputs;
+    this.isIgniting = true;
+    this.isHoldingMatch = false;
+    this.ignitionHoldDuration = 0;
+    this.ignitionAngleT = 0;
+    
+    // Choose random phase offsets for Lissajous curves
+    this.ignitionPhi = Array.from({ length: 6 }, () => Math.random() * 2 * Math.PI);
+
+    // Show overlay
+    const overlay = document.getElementById('ignition-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+
+    // Set instructions readouts
+    const stanceName = document.getElementById('ignition-stance-name');
+    const swayLevel = document.getElementById('ignition-sway-level');
+    const dampRiskText = document.getElementById('ignition-damp-risk');
+    const progressBar = document.getElementById('ignition-progress-bar');
+    
+    if (stanceName) {
+      stanceName.textContent = this.getFriendlyProtectionName(inputs.weatherProtection || 'none');
+    }
+    if (swayLevel) {
+      if (inputs.weatherProtection === 'operator_cowl') {
+        swayLevel.textContent = 'Heavy Sway (Cowl)';
+      } else if (inputs.weatherWind > 55) {
+        swayLevel.textContent = 'Turbulent (Wind)';
+      } else {
+        swayLevel.textContent = 'Standard';
+      }
+    }
+    if (dampRiskText) {
+      let dampRisk = inputs.weatherRain;
+      if (inputs.weatherProtection === 'parchment') {
+        dampRisk = 0;
+      } else if (inputs.weatherProtection === 'pan_shield') {
+        dampRisk = Math.round(dampRisk * 0.1);
+      } else if (inputs.weatherProtection === 'operator_cowl') {
+        dampRisk = Math.round(dampRisk * 0.25);
+      }
+      dampRiskText.textContent = `${dampRisk.toFixed(0)}%`;
+    }
+    if (progressBar) {
+      progressBar.style.width = '0%';
+    }
+
+    // Hide spark initially
+    const spark = document.getElementById('spark-indicator');
+    if (spark) {
+      spark.style.display = 'none';
+    }
+
+    // Setup events
+    this.setupMinigameEvents();
+  }
+
+  private setupMinigameEvents() {
+    const overlay = document.getElementById('ignition-overlay');
+    if (!overlay) return;
+
+    // Remove old listeners to prevent duplicates
+    overlay.onmousedown = null;
+    overlay.onmouseup = null;
+    overlay.onmouseleave = null;
+    overlay.onmousemove = null;
+    overlay.ontouchstart = null;
+    overlay.ontouchend = null;
+    overlay.ontouchmove = null;
+
+    const startHolding = (e: Event) => {
+      e.preventDefault();
+      if (!this.isIgniting || this.isHoldingMatch) return;
+      this.isHoldingMatch = true;
+      
+      const isDamp = (this.ignitionInputs?.weatherRain || 0) > 0;
+      AudioManager.getInstance().playIgnitionHold(true, isDamp);
+
+      const spark = document.getElementById('spark-indicator');
+      if (spark) {
+        spark.style.display = 'block';
+        this.updateSparkPosition(e, spark, overlay);
+      }
+    };
+
+    const stopHolding = () => {
+      if (!this.isIgniting || !this.isHoldingMatch) return;
+      this.isHoldingMatch = false;
+      AudioManager.getInstance().playIgnitionHold(false);
+      
+      const spark = document.getElementById('spark-indicator');
+      if (spark) {
+        spark.style.display = 'none';
+      }
+
+      // Fire with current progress!
+      this.completeIgnitionMinigame();
+    };
+
+    const moveSpark = (e: Event) => {
+      if (!this.isIgniting) return;
+      const spark = document.getElementById('spark-indicator');
+      if (spark && spark.style.display === 'block') {
+        this.updateSparkPosition(e, spark, overlay);
+      }
+    };
+
+    overlay.onmousedown = startHolding;
+    overlay.ontouchstart = startHolding;
+
+    overlay.onmouseup = stopHolding;
+    overlay.onmouseleave = stopHolding;
+    overlay.ontouchend = stopHolding;
+
+    overlay.onmousemove = moveSpark;
+    overlay.ontouchmove = moveSpark;
+  }
+
+  private updateSparkPosition(e: any, spark: HTMLElement, container: HTMLElement) {
+    const rect = container.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    spark.style.left = `${x}px`;
+    spark.style.top = `${y}px`;
+  }
+
+  private updateMinigame(dt: number) {
+    if (!this.isIgniting || !this.ignitionInputs) return;
+
+    // 1. If holding match, increment progress
+    if (this.isHoldingMatch) {
+      this.ignitionHoldDuration += dt;
+      if (this.ignitionHoldDuration >= this.ignitionTargetDurationMs) {
+        this.ignitionHoldDuration = this.ignitionTargetDurationMs;
+        this.completeIgnitionMinigame();
+        return;
+      }
+      
+      const progressBar = document.getElementById('ignition-progress-bar');
+      if (progressBar) {
+        const pct = (this.ignitionHoldDuration / this.ignitionTargetDurationMs) * 100;
+        progressBar.style.width = `${pct}%`;
+      }
+    }
+
+    // 2. Increment angle time for Lissajous sway
+    this.ignitionAngleT += dt * 0.001; // convert to seconds
+
+    // 3. Compute Lissajous Reticle Coordinates
+    const reticle = document.getElementById('aim-reticle');
+    if (reticle) {
+      const inputs = this.ignitionInputs;
+      const phi1 = this.ignitionPhi[0];
+      const phi2 = this.ignitionPhi[1];
+      const phi3 = this.ignitionPhi[2];
+      const phi4 = this.ignitionPhi[3];
+      const phi5 = this.ignitionPhi[4];
+      const phi6 = this.ignitionPhi[5];
+
+      // Multi-frequency Lissajous equations (matching Rust sim logic)
+      const ampFatigue = 1.0; // minigame starts fresh
+      const windMultiplier = 1.0 + 0.02 * inputs.weatherWind;
+      const isOperatorCowl = inputs.weatherProtection === 'operator_cowl';
+      const aSway = 45.0 * windMultiplier * ampFatigue * (isOperatorCowl ? 2.5 : 1.0);
+
+      const dx = aSway * (Math.sin(this.ignitionAngleT * 0.85 + phi1) + 0.35 * Math.sin(this.ignitionAngleT * 2.41 + phi2) + 0.12 * Math.sin(this.ignitionAngleT * 5.83 + phi3));
+      const dy = aSway * (Math.cos(this.ignitionAngleT * 0.95 + phi4) + 0.35 * Math.cos(this.ignitionAngleT * 2.13 + phi5) + 0.12 * Math.cos(this.ignitionAngleT * 6.11 + phi6));
+
+      reticle.style.left = `calc(50% + ${dx}px)`;
+      reticle.style.top = `calc(50% + ${dy}px)`;
+    }
+
+    // 4. Handle Rain Drops particles
+    if (this.ignitionInputs.weatherRain > 0) {
+      this.spawnRainDrops(this.ignitionInputs.weatherRain);
+    }
+  }
+
+  private spawnRainDrops(rainIntensity: number) {
+    const rainOverlay = document.getElementById('rain-splash-overlay');
+    if (!rainOverlay) return;
+
+    // Control density: spawn chance per frame
+    const spawnChance = rainIntensity / 100 * 0.25;
+    if (Math.random() < spawnChance) {
+      const drop = document.createElement('div');
+      drop.className = 'rain-drop-splash';
+      drop.style.left = `${Math.random() * 100}%`;
+      const speed = 0.4 + Math.random() * 0.4;
+      drop.style.animationDuration = `${speed}s`;
+
+      rainOverlay.appendChild(drop);
+
+      // Remove after animation finishes
+      setTimeout(() => {
+        drop.remove();
+      }, speed * 1000);
+    }
+  }
+
+  private completeIgnitionMinigame() {
+    this.isIgniting = false;
+    this.isHoldingMatch = false;
+    AudioManager.getInstance().playIgnitionHold(false);
+
+    const overlay = document.getElementById('ignition-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+
+    if (this.ignitionInputs) {
+      const ratio = this.ignitionHoldDuration / this.ignitionTargetDurationMs;
+      let primingQuality = 100.0;
+      if (ratio < 0.1) {
+        primingQuality = 5.0; // Fail/fizzle
+      } else {
+        primingQuality = Math.min(100.0, ratio * 100.0);
+      }
+
+      const finalInputs = {
+        ...this.ignitionInputs,
+        primingQuality
+      };
+
+      this.selectTab('charts');
+      this.handleFireShot(finalInputs);
     }
   }
 }

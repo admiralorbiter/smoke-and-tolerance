@@ -13,6 +13,7 @@ export class ControlsPanel {
   private valRefinement = document.getElementById('val-refinement') as HTMLSpanElement;
   private selectProjectile = document.getElementById('select-projectile') as HTMLSelectElement;
   private selectSealing = document.getElementById('select-sealing') as HTMLSelectElement;
+  private selectTarget = document.getElementById('select-target') as HTMLSelectElement;
   private btnFire = document.getElementById('btn-fire') as HTMLButtonElement;
 
   private sliderHumidity = document.getElementById('slider-humidity') as HTMLInputElement;
@@ -69,6 +70,7 @@ export class ControlsPanel {
       propellantProfile: this.selectPropellant.value,
       persistentFatigue: 0.0,
       flawSeed: 0,
+      targetArmorType: this.selectTarget ? this.selectTarget.value : 'silk_lamellar',
     };
   }
 

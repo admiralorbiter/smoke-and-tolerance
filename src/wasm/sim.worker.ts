@@ -17,8 +17,19 @@ self.onmessage = async (e: MessageEvent) => {
   try {
     await initWasm();
     
+    // Flatten custom alchemical mix parameters for flat Rust struct mapping
+    const flatInput = {
+      ...input,
+      weatherProtection: input.weatherProtection || input.alchemicalMix?.weatherProtection,
+      saltpeterRatio: input.alchemicalMix?.saltpeterRatio,
+      charcoalRatio: input.alchemicalMix?.charcoalRatio,
+      sulfurRatio: input.alchemicalMix?.sulfurRatio,
+      charcoalSource: input.alchemicalMix?.charcoalSource,
+      saltpeterPurity: input.alchemicalMix?.saltpeterPurity,
+    };
+    
     // Run the simulator in WASM
-    const result = simulate_shot(input);
+    const result = simulate_shot(flatInput);
 
     // Copy the flat f64 frame data out of WASM memory to prevent detaching WASM memory buffer
     const floatCount = result.frameCount * FRAME_STRIDE;

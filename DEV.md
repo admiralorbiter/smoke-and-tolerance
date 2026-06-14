@@ -243,4 +243,46 @@ Each barrel material rings at distinct modal frequencies:
 *   **Explosion:** Distorted white noise low-pass filtered at \(300\text{ Hz}\) decaying in \(1.2\text{ s}\).
 *   **Tinnitus Tone:** Continuous \(4000\text{ Hz}\) sine wave fading out linearly over \(4\text{ seconds}\).
 
+### 7. Alchemical Victory Seal (Premium Stamping)
+*   **Sizzle Press:** Highpass noise sweep starting at \(2500\text{ Hz}\) decaying exponentially in \(200\text{ ms}\) to simulate the hot wax press.
+*   **Heavy Thud:** Low-frequency sine wave swept from \(120\text{ Hz}\) down to \(45\text{ Hz}\) decaying in \(450\text{ ms}\) for the mechanical stamp press.
+*   **Atmospheric Chime:** A major triad chord (A3: \(220\text{ Hz}\), E4: \(330\text{ Hz}\), A4: \(440\text{ Hz}\), C#5: \(554\text{ Hz}\)) fading out over \(1.8\text{ seconds}\) with a slow LFO pitch vibrato (\(5\text{ Hz}\), frequency deviation \(\pm 2\text{ Hz}\)) representing alchemical resolution.
+
+---
+
+## 🔬 Premium Mechanics Reference
+
+### 1. Terminal Ballistics (Poncelet Target Penetration)
+Upon impact at 35m, target penetration depth $d$ (in mm) is integrated using Poncelet's empirical dynamic resistance equations:
+$$d = \frac{m}{2 b_{mat} A_{proj} \rho_{target}} \ln\left( 1 + \frac{b_{mat} \rho_{target}}{a_{mat}} v_{impact}^2 \right)$$
+Where:
+*   $\rho_{target}$: Target density (Lamellar: \(1100\text{ kg/m}^3\), Bamboo: \(800\text{ kg/m}^3\), Oak: \(900\text{ kg/m}^3\), Iron: \(7850\text{ kg/m}^3\)).
+*   $a_{mat}, b_{mat}$: Material resistance coefficients.
+*   **Lead Projectile deformation (Mushrooming):** Malleable lead deforms based on impact energy, increasing $A_{proj}$ and resulting in shorter, realistic penetration holes.
+*   **Stone Projectile fracture (Shattering):** Brittle stone shatters into splintered fragments $N_{frag}$ on impact against dense targets, causing penetration depth to decay.
+
+### 2. Stoichiometric Priority Chemical Reaction Solver
+Replaces qualitative propellant coefficients with a mole-based priority reaction solver. Inputs of Nitrum ($KNO_3$), Carbo ($C$), and Sulphur ($S$) are converted to absolute molar quantities and allocated:
+1.  **Nitrogen Gas & Solid Carbonate:** $2 KNO_3 + 3 C \rightarrow K_2CO_3 + N_2 + CO_2 + CO$
+2.  **Solid Potassium Sulfide:** $K_2CO_3 + S \rightarrow K_2S + CO_2$
+3.  **Moisture Decay (Wet Weather):** Soluble potassium sulfide reacts with moisture and carbon dioxide to yield hydrogen sulfide gas and potassium carbonate:
+    $$K_2S + H_2O + CO_2 \rightarrow K_2CO_3 + H_2S\text{ (gas)}$$
+4.  **Reaction Enthalpy & Flame Temperature:** Calculates precise heat release ($\Delta H_{rxn}$), gas yield mass ($m_{gas}$), and corrosive solid residue ($m_{fouling}$), feeding into the thermochemistry pyrometer and corrosion warnings.
+
+### 3. Touch-Hole Ignition Aim Sway
+During the match-striking phase, multi-frequency Lissajous curves model breathing and holding aim sway:
+$$\theta_x(t) = A_{sway} \cdot \left[ \sin(0.85 t + \phi_1) + 0.35 \sin(2.41 t + \phi_2) + 0.12 \sin(5.83 t + \phi_3) \right]$$
+$$\theta_y(t) = A_{sway} \cdot \left[ \cos(0.95 t + \phi_4) + 0.35 \cos(2.13 t + \phi_5) + 0.12 \cos(6.11 t + \phi_6) \right]$$
+*   Sway amplitude $A_{sway}$ is scaled by weather wind speeds and active fatigue.
+*   The Operator Cowl protective stance multiplies sway by $2.5$ due to restricted visibility but reduces damp rain exposure misfires.
+
+### 4. Chronicle Challenge Progression Validation
+The frontend validates results on worker callback against strict historical constraints:
+*   **Strange Fire:** Bamboo barrel, Uneven Serpentine propellant, no split fibers (ruptures), burn duration $\ge 8.0\text{ ms}$.
+*   **Fire Delivered:** Bamboo barrel, Lead Arrow-Bolt, no ruptures, velocity $\ge 40.0\text{ m/s}$.
+*   **Directional Blast:** Wrought Iron barrel, Pebble Spray, no weld seam failures, velocity $\ge 30.0\text{ m/s}$.
+*   **The Difficult Shot:** Cast Bronze barrel, Lead Ball, no ruptures, no hoop stress deformation, velocity $\ge 90.0\text{ m/s}$.
+*   **Foundry & Siege:** Cast Bronze bombard, Rough Stone projectile, Clay wadding, velocity $\ge 110.0\text{ m/s}$.
+
+
 

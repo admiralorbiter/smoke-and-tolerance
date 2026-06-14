@@ -58,31 +58,119 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     };
 
     let custom_mix_active = input.custom_mix_active.unwrap_or(false);
-    let saltpeter_ratio = input.saltpeter_ratio.unwrap_or(75.0) / 100.0;
-    let charcoal_ratio = input.charcoal_ratio.unwrap_or(15.0) / 100.0;
-    let sulfur_ratio = input.sulfur_ratio.unwrap_or(10.0) / 100.0;
-    let saltpeter_purity = input.saltpeter_purity.unwrap_or(100.0) / 100.0;
-    let charcoal_source = input.charcoal_source.clone().unwrap_or("alder".to_string());
+    
+    // Determine chemistry inputs
+    let (saltpeter_ratio, charcoal_ratio, sulfur_ratio, saltpeter_purity, charcoal_source) = if custom_mix_active {
+        (
+            input.saltpeter_ratio.unwrap_or(75.0) / 100.0,
+            input.charcoal_ratio.unwrap_or(15.0) / 100.0,
+            input.sulfur_ratio.unwrap_or(10.0) / 100.0,
+            input.saltpeter_purity.unwrap_or(100.0) / 100.0,
+            input.charcoal_source.clone().unwrap_or("alder".to_string()),
+        )
+    } else {
+        (
+            0.75,
+            0.15,
+            0.10,
+            input.refinement_level / 100.0,
+            "alder".to_string(),
+        )
+    };
 
-    // Chemistry reaction kinetics parameters
-    let mut temp_ignition = 2400.0 * (1.0 - humidity_slowdown * 0.15); // Peak temp in K
+    // Base charcoal properties
+    let (f_C, f_ash, f_volatile) = match charcoal_source.as_str() {
+        "willow" => (0.90, 0.02, 0.08),
+        "alder" => (0.82, 0.05, 0.13),
+        "oak" | _ => (0.70, 0.12, 0.18),
+    };
 
+    let total_mix_mass = saltpeter_ratio + charcoal_ratio + sulfur_ratio;
+    
+    // Moles per kg of total mix
+    let n_K = (saltpeter_ratio * saltpeter_purity / total_mix_mass) / 0.1011;
+    let n_N = n_K;
+    let n_O = 3.0 * n_K;
+    let n_C = ((charcoal_ratio * f_C) / total_mix_mass) / 0.01201;
+    let n_S = (sulfur_ratio / total_mix_mass) / 0.03206;
+
+    // Stoichiometric Priority Molar Product Allocation
+    let n_N2 = 0.5 * n_N;
+    let n_K2CO3 = (0.5 * n_K).min(n_C).min(n_O / 3.0);
+    
+    let n_K_rem = n_K - 2.0 * n_K2CO3;
+    let n_C_rem = n_C - n_K2CO3;
+    let n_O_rem = n_O - 3.0 * n_K2CO3;
+    
+    let n_K2S = (0.5 * n_K_rem).min(n_S);
+    let n_K_rem2 = n_K_rem - 2.0 * n_K2S;
+    let n_S_rem = n_S - n_K2S;
+
+    let (n_CO2, n_CO, n_C_soot) = if n_O_rem >= 2.0 * n_C_rem {
+        (n_C_rem, 0.0, 0.0)
+    } else if n_O_rem >= n_C_rem {
+        (n_O_rem - n_C_rem, 2.0 * n_C_rem - n_O_rem, 0.0)
+    } else {
+        (0.0, n_O_rem, n_C_rem - n_O_rem)
+    };
+
+    let n_S_soot = n_S_rem;
+    let n_K_res = n_K_rem2;
+
+    // Wet weather reaction conversions
+    let alpha_wet = 0.35 * (input.weather_humidity / 100.0);
+    let delta_n = alpha_wet * n_K2S;
+    
+    let n_K2S_final = n_K2S - delta_n;
+    let n_K2CO3_final = n_K2CO3 + delta_n;
+    let n_H2S = delta_n;
+    let n_CO2_final = (n_CO2 - delta_n).max(0.0);
+
+    // Moles to Mass calculations per kg reactant
+    let m_N2 = n_N2 * 0.02801;
+    let m_CO2 = n_CO2_final * 0.04401;
+    let m_CO = n_CO * 0.02801;
+    let m_H2S = n_H2S * 0.03408;
+    let gas_yield_factor = m_N2 + m_CO2 + m_CO + m_H2S;
+
+    let m_K2CO3 = n_K2CO3_final * 0.1382;
+    let m_K2S = n_K2S_final * 0.11026;
+    let m_C_soot = n_C_soot * 0.01201;
+    let m_S_soot = n_S_soot * 0.03206;
+    let m_K_res = n_K_res * 0.5 * 0.0942;
+    let soot_yield_factor = m_K2CO3 + m_K2S + m_C_soot + m_S_soot + m_K_res + (charcoal_ratio * f_ash) / total_mix_mass;
+    
+    // Remaining mass represents suspended smoke particle fraction
+    let smoke_yield_factor = (1.0 - gas_yield_factor - soot_yield_factor).max(0.0);
+
+    // Enthalpy balance for Flame Temperature
+    let h_reactants = n_K * -494.6;
+    let h_products = (n_K2CO3_final * -1151.0)
+        + (n_K2S_final * -381.0)
+        + (n_CO2_final * -393.5)
+        + (n_CO * -110.5)
+        + (n_H2S * -20.6);
+    let delta_h_rxn = h_products - h_reactants;
+    let q_gen = (-delta_h_rxn * 1000.0).max(0.0); // J/kg
+
+    let cv_gas = 1000.0;
+    let c_solid = 800.0;
+    let mut temp_ignition = 293.15 + q_gen / (gas_yield_factor * cv_gas + soot_yield_factor * c_solid);
+    temp_ignition = temp_ignition.clamp(500.0, 3000.0);
+
+    // Custom Mix Burn Modifiers
     if custom_mix_active {
         burn_profile_code = 5.0; // Custom alchemical code
         is_corned = input.propellant_profile == "steady" || input.propellant_profile == "fast_then_weak";
         initial_grain_r = if is_corned { 0.0012 } else { 0.0 };
 
-        // Base charcoal source modifier
         let wood_mult = match charcoal_source.as_str() {
             "willow" => 1.35,
             "alder" => 1.0,
             "oak" | _ => 0.65,
         };
         
-        // Stoichiometric deviation from 75/15/10
         let dev = (saltpeter_ratio - 0.75).abs() + (charcoal_ratio - 0.15).abs() + (sulfur_ratio - 0.10).abs();
-        
-        // Stoichiometry factor for burning speed
         let mut stoichiometry_burn = (1.0 - dev * 1.5).max(0.15);
         if saltpeter_ratio > 0.85 {
             stoichiometry_burn *= (1.0 - (saltpeter_ratio - 0.85) * 6.0).max(0.1);
@@ -91,7 +179,6 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         }
 
         burn_rate_mult = wood_mult * saltpeter_purity * stoichiometry_burn;
-        // Apply profile multipliers
         if input.propellant_profile == "fast_then_weak" {
             burn_rate_mult *= 1.5;
         } else if input.propellant_profile == "slow_smoky" {
@@ -100,17 +187,15 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             burn_rate_mult *= 0.2;
         }
 
-        // Gas yield
-        initial_gas_yield = 0.45 * (saltpeter_ratio / 0.75).min(1.0) * (charcoal_ratio / 0.15).min(1.0) * (1.0 - dev * 0.5).max(0.2);
+        initial_gas_yield = gas_yield_factor;
+    } else {
+        initial_gas_yield = gas_yield_factor;
+        // Standard profiles get standard base rate modifiers
         if input.propellant_profile == "slow_smoky" {
             initial_gas_yield *= 0.7;
         } else if input.propellant_profile == "damp_partial" {
             initial_gas_yield *= 0.5;
         }
-
-        // Temperature
-        let base_temp = 2400.0 * (saltpeter_ratio / 0.75).clamp(0.5, 1.15) * (1.0 - dev * 0.4).max(0.3);
-        temp_ignition = base_temp * (1.0 - humidity_slowdown * 0.15);
     }
 
     let propellant_mass: f64 = 0.015; // 15 grams propellant charge
@@ -201,15 +286,15 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     // Clamp to minimum of 0.1 ms to prevent division-by-zero or negative values
     total_ignition_delay = total_ignition_delay.max(0.1);
 
-    // 3. Evaluate weather misfire probabilities (stochastic check performed once)
+    // 3. Evaluate weather misfire probabilities using Physics formulas
     let rain_frac = input.weather_rain / 100.0;
     let wind_frac = input.weather_wind / 100.0;
 
-    let rain_exp = rain_frac * rain_coeff;
-    let wind_exp = wind_frac * wind_coeff;
+    let eta_rain = 1.0 - rain_coeff;
+    let eta_wind = 1.0 - wind_coeff;
 
-    let wet_prob = 1.0 - (-0.25 * rain_exp * total_ignition_delay).exp();
-    let blown_prob = 1.0 - (-0.18 * wind_exp * total_ignition_delay).exp();
+    let wet_prob = 1.0 - (-0.25 * rain_frac * (1.0 - eta_rain) * total_ignition_delay).exp();
+    let blown_prob = 1.0 - (-0.03 * wind_frac * wind_frac * (1.0 - eta_wind) * total_ignition_delay).exp();
 
     let roll_wet: f64 = rng.gen();
     let roll_blown: f64 = rng.gen();
@@ -387,25 +472,18 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 }
             }
 
-            // Chemical gas yield
-            let gas_yield_factor = initial_gas_yield * (1.0 - humidity_slowdown * 0.25);
-            let gas_generated = burned_in_step * gas_yield_factor;
+            // Chemical gas yield populated from stoichiometry solver
+            let gas_generated = burned_in_step * initial_gas_yield;
             gas_mass += gas_generated;
 
             // Soot & smoke residues
-            let soot_fraction = if custom_mix_active {
-                let wood_soot_mult = match charcoal_source.as_str() {
-                    "willow" => 0.4,
-                    "alder" => 1.0,
-                    "oak" | _ => 2.0,
-                };
-                (0.15 * (charcoal_ratio / 0.15) * wood_soot_mult).clamp(0.05, 0.60)
-            } else {
-                if burn_profile_code == 3.0 || burn_profile_code == 4.0 { 0.30 } else { 0.15 }
-            };
-            let residue_generated = burned_in_step * (1.0 - gas_yield_factor);
-            let step_soot = residue_generated * soot_fraction;
-            let step_smoke = residue_generated * (1.0 - soot_fraction);
+            let residue_generated = burned_in_step * (1.0 - initial_gas_yield);
+            
+            // Normalized fractions derived from stoichiometry solver
+            let soot_frac = soot_yield_factor / (soot_yield_factor + smoke_yield_factor).max(0.001);
+            let step_soot = residue_generated * soot_frac;
+            let step_smoke = residue_generated * (1.0 - soot_frac);
+            
             total_soot_fouling += step_soot;
             total_smoke_ejected += step_smoke;
 
@@ -482,8 +560,14 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             };
             pressure = pressure.max(0.1);
 
-            // Force balance
-            let force_pressure = (pressure - 0.1) * 1_000_000.0 * bore_area;
+            // Pre-projectile nose compression pressure calculations
+            let v_front = (bore_area * (barrel_length - proj_x)).max(0.000001);
+            let d_m_leak_dt = leakage_rate * 1000.0; // kg/s
+            let p_front_pa = 101325.0 + (287.05 * 293.15 * d_m_leak_dt / v_front) * (dt / 1000.0); // compression equation
+            let p_front = (p_front_pa / 1_000_000.0).clamp(0.0, pressure * 0.95);
+
+            // Force balance with nose pressure
+            let force_pressure = (pressure - p_front) * 1_000_000.0 * bore_area;
 
             if input.projectile_type == "none" {
                 is_moving = false;
@@ -503,7 +587,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                         jitter_coeff = (1.0 + noise).max(0.5);
                     }
                     
-                    let force_friction = dynamic_friction_coeff * static_friction_threshold * jitter_coeff;
+                    // Dynamic lubrication drying friction modifier feedback
+                    let dry_factor = 1.0 + 5.0 * (total_gas_leaked / propellant_mass);
+                    let force_friction = dynamic_friction_coeff * dry_factor * static_friction_threshold * jitter_coeff;
                     let force_net = (force_pressure - force_friction).max(0.0);
                     
                     let accel = force_net / proj_mass;
@@ -677,22 +763,40 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     stage = "flight".to_string();
     let mut base_jitter = (wind_disturbance * 2.8) + (1.0 - shape_regularity) * 4.2;
     if input.persistent_fatigue > 0.0 {
-        // Deformed/fatigued barrel scales aim jitter due to out-of-round bore
         base_jitter *= 1.0 + 2.0 * input.persistent_fatigue;
     }
     let mut fixed_bias = 0.0;
 
     match weather_protection.as_str() {
         "pan_shield" => {
-            fixed_bias = 1.0; // 1 degree bias
+            fixed_bias = 1.0;
         }
         "operator_cowl" => {
-            base_jitter += 2.5; // increase random range by 2.5 degrees
+            base_jitter += 2.5;
         }
         _ => {}
     }
 
-    let aim_jitter = fixed_bias + rng.gen_range(-base_jitter..base_jitter);
+    // Multi-frequency Lissajous Aim Sway solver
+    let phi1 = (((input.seed * 1) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    let phi2 = (((input.seed * 2) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    let phi3 = (((input.seed * 3) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    let phi4 = (((input.seed * 4) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    let phi5 = (((input.seed * 5) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    let phi6 = (((input.seed * 6) % 100) as f64 / 100.0) * 2.0 * std::f64::consts::PI;
+    
+    let amp_fatigue = 1.0 + 0.15 * total_ignition_delay;
+    let steadiness_factor = 1.0 - (input.priming_quality / 100.0);
+    let mut a_sway = 5.0 * steadiness_factor * (1.0 + 0.02 * input.weather_wind) * amp_fatigue;
+    if weather_protection == "operator_cowl" {
+        a_sway *= 2.5;
+    }
+    
+    let angle_t = total_ignition_delay * 0.001;
+    let theta_x = a_sway * ((angle_t * 0.85 + phi1).sin() + 0.35 * (angle_t * 2.41 + phi2).sin() + 0.12 * (angle_t * 5.83 + phi3).sin());
+    let theta_y = a_sway * ((angle_t * 0.95 + phi4).cos() + 0.35 * (angle_t * 2.13 + phi5).cos() + 0.12 * (angle_t * 6.11 + phi6).cos());
+    
+    let aim_jitter = theta_x + fixed_bias + rng.gen_range(-base_jitter..base_jitter);
 
     let target_distance = 35.0;
     let mut flight_x = 0.0;
@@ -727,16 +831,79 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         flight_frames.push((flight_x, flight_y, speed));
     }
 
+    // Solve target armor properties
+    let target_armor = input.target_armor_type.clone().unwrap_or("silk_lamellar".to_string());
+    let (rho_target, a_mat_target, b_mat_target, thickness_target_mm) = match target_armor.as_str() {
+        "woven_bamboo" => (800.0, 25.0 * 1000000.0, 0.20, 20.0),
+        "oak_wood" => (750.0, 60.0 * 1000000.0, 0.35, 40.0),
+        "wrought_iron" => (7860.0, 320.0 * 1000000.0, 0.50, 6.0),
+        "silk_lamellar" | _ => (1100.0, 50.0 * 1000000.0, 0.15, 15.0),
+    };
+
+    let proj_area = std::f64::consts::PI * proj_radius * proj_radius;
+    let v_impact = flight_frames.last().map(|f| f.2).unwrap_or(exit_velocity);
+    let e_k = 0.5 * proj_mass * v_impact * v_impact;
+
+    // Terminal Penetration Poncelet Solver
+    let pointed_factor = match input.projectile_type.as_str() {
+        "lead_arrow" => 1.2,
+        "lead_ball" => 0.8,
+        "pebbles" => 0.5,
+        "rough_stone" | _ => 0.4,
+    };
+
+    let final_penetration_mm = if input.projectile_type == "lead_ball" || input.projectile_type == "lead_arrow" {
+        // Malleable dynamic deformation
+        let sigma_impact = a_mat_target + b_mat_target * rho_target * v_impact * v_impact;
+        let delta = if sigma_impact > 15.0 * 1000000.0 {
+            1.0 + 0.35 * (1.0 + (sigma_impact - 15.0 * 1000000.0) / (15.0 * 1000000.0)).ln()
+        } else {
+            1.0
+        };
+        let a_deformed = proj_area * delta * delta;
+        let d_unbroken = (proj_mass / (2.0 * b_mat_target * a_deformed * rho_target)) * (1.0 + (b_mat_target * rho_target * v_impact * v_impact) / a_mat_target).ln();
+        d_unbroken * pointed_factor * 1000.0 // mm
+    } else {
+        // Brittle fracture fragments
+        let sigma_impact = a_mat_target + b_mat_target * rho_target * v_impact * v_impact;
+        let d_unbroken = (proj_mass / (2.0 * b_mat_target * proj_area * rho_target)) * (1.0 + (b_mat_target * rho_target * v_impact * v_impact) / a_mat_target).ln();
+        let n_frag = if sigma_impact > 60.0 * 1000000.0 {
+            (1.0 + (sigma_impact - 60.0 * 1000000.0) / (60.0 * 1000000.0)).powi(3).clamp(1.0, 64.0)
+        } else {
+            1.0
+        };
+        (d_unbroken / n_frag.sqrt()) * pointed_factor * 1000.0 // mm
+    };
+
+    let is_penetrated = final_penetration_mm >= thickness_target_mm;
+
     let total_flight_frames = flight_frames.len();
     for (i, (fx, fy, fspeed)) in flight_frames.into_iter().enumerate() {
         let normalized_step = i as f64 / total_flight_frames.max(1) as f64;
         let decay = (-0.3 * i as f64).exp();
+        
+        let is_last = i == total_flight_frames - 1;
+        // Overload projectile_y on final frame to convey penetration depth
+        let output_y = if is_last { final_penetration_mm } else { fy };
+
+        let step_warnings = if is_last {
+            if fy <= 0.0 {
+                vec!["Shot dropped short".to_string()]
+            } else if is_penetrated {
+                vec![format!("TARGET PERFORATED! Penetration: {:.1}mm", final_penetration_mm)]
+            } else {
+                vec![format!("Embedded in target. Penetration: {:.1}mm", final_penetration_mm)]
+            }
+        } else {
+            vec![]
+        };
+
         frames.push(ShotFrame {
             t: 0.0,
             time_ms: time_ms + i as f64 * (flight_dt * 1000.0),
             stage: if fx >= target_distance || fy <= 0.0 { "impact".to_string() } else { stage.clone() },
             projectile_x: fx,
-            projectile_y: fy,
+            projectile_y: output_y,
             projectile_velocity: fspeed,
             pressure: 0.1,
             leakage: 0.0,
@@ -744,13 +911,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             smoke: 0.2 * (1.0 - normalized_step),
             fouling: total_soot_fouling * 500.0,
             aim_offset: aim_jitter,
-            warnings: if i == total_flight_frames - 1 {
-                if fy <= 0.0 { vec!["Shot dropped short".to_string()] }
-                else if (fy - 1.5).abs() < 0.3 { vec!["DIRECT BULLSEYE IMPACT!".to_string()] }
-                else { vec!["Projectile impacted target".to_string()] }
-            } else {
-                vec![]
-            },
+            warnings: step_warnings,
             unburned_mass,
             gas_mass: gas_mass * decay,
             temperature: 293.15 + (current_temp - 293.15) * decay,
@@ -762,13 +923,19 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         });
     }
 
-    // Final outcome
+    // Final outcome checks
     let final_y = frames.last().unwrap().projectile_y;
     let final_x = frames.last().unwrap().projectile_x;
 
     if final_x >= target_distance {
-        let hit_dist = (final_y - 1.5).abs();
-        if hit_dist < 0.3 {
+        if is_penetrated {
+            outcomes.push("target_penetrated".to_string());
+        } else {
+            outcomes.push("target_embedded".to_string());
+        }
+        
+        let hit_dist = (theta_y.to_radians().sin() * target_distance).abs(); // vertical drop aim deviation
+        if hit_dist < 0.8 && frames.last().unwrap().projectile_y > 0.0 {
             outcomes.push("target_hit".to_string());
         } else {
             outcomes.push("target_miss".to_string());

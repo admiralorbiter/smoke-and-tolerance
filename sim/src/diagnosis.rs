@@ -157,6 +157,8 @@ pub fn generate_result(
 
     // 4. Process Successful Launches (Hits vs. Misses)
     let is_hit = outcomes.contains(&"target_hit".to_string());
+    let is_penetrated = outcomes.contains(&"target_penetrated".to_string());
+    let is_embedded = outcomes.contains(&"target_embedded".to_string());
     
     if is_hit {
         summary = format!(
@@ -197,6 +199,20 @@ pub fn generate_result(
         }
     }
 
+    if is_penetrated {
+        diagnosis.push(DiagnosisEntry {
+            severity: "info".to_string(),
+            title: "Target Armor Perforated".to_string(),
+            explanation: "The projectile's kinetic energy overcame the armor's dynamic Poncelet shear limits, drilling completely through the protection layer.".to_string(),
+        });
+    } else if is_embedded {
+        diagnosis.push(DiagnosisEntry {
+            severity: "warning".to_string(),
+            title: "Projectile Embedded".to_string(),
+            explanation: "The projectile failed to pass through the target, remaining wedged in the armor plating or weaving layer.".to_string(),
+        });
+    }
+
     // General warnings / notes
     if outcomes.contains(&"barrel_deformed".to_string()) {
         diagnosis.push(DiagnosisEntry {
@@ -217,12 +233,34 @@ pub fn generate_result(
         });
     }
 
-    if input.weather_humidity > 50.0 {
-        diagnosis.push(DiagnosisEntry {
-            severity: "info".to_string(),
-            title: "Humidity Fouling".to_string(),
-            explanation: "Damp air leaves a sticky, sulfurous soot deposit inside the barrel. Firing again without clearing the bore will increase friction and risk jamming subsequent shots.".to_string(),
-        });
+    // Alchemical Stoichiometry Ledger Checks
+    let custom_mix_active = input.custom_mix_active.unwrap_or(false);
+    let saltpeter_ratio = input.saltpeter_ratio.unwrap_or(75.0) / 100.0;
+    let charcoal_ratio = input.charcoal_ratio.unwrap_or(15.0) / 100.0;
+    let sulfur_ratio = input.sulfur_ratio.unwrap_or(10.0) / 100.0;
+
+    if custom_mix_active {
+        if charcoal_ratio > 0.20 {
+            diagnosis.push(DiagnosisEntry {
+                severity: "warning".to_string(),
+                title: "Carbo-Rich Smut".to_string(),
+                explanation: "Thy mix is choked with Carbo. The fuel soot clings to the barrel like grease, increasing friction and scraping subsequent projectiles.".to_string(),
+            });
+        }
+        if saltpeter_ratio > 0.80 {
+            diagnosis.push(DiagnosisEntry {
+                severity: "warning".to_string(),
+                title: "Over-oxygenated Nitrum".to_string(),
+                explanation: "Thy mix burns with the heat of a furnace, yet lacks the gas volume to propel the lead. Add more charcoal to give the blast its breath.".to_string(),
+            });
+        }
+        if sulfur_ratio > 0.15 {
+            diagnosis.push(DiagnosisEntry {
+                severity: "warning".to_string(),
+                title: "Acidic Sulfur Decay".to_string(),
+                explanation: "The sulfurous vapor bites the barrel. High sulfur ratios form acidic deposits that accelerate structural corrosion under humidity.".to_string(),
+            });
+        }
     }
 
     ShotResult {
