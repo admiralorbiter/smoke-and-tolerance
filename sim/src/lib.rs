@@ -21,6 +21,9 @@ pub struct ShotInput {
     pub persistent_fouling: f64,    // 0-1
     pub propellant_profile: String, // "uneven", "fast_then_weak", "steady", "slow_smoky", "damp_partial"
     
+    pub persistent_fatigue: f64,    // 0-1
+    pub flaw_seed: u64,
+    
     // Custom alchemical mix options
     pub custom_mix_active: Option<bool>,
     pub saltpeter_ratio: Option<f64>,
@@ -56,6 +59,7 @@ pub struct ShotFrame {
     pub wall_heat_loss: f64,        // convective energy lost in Joules
     pub fouling_index: f64,         // persistent fouling index
     pub burn_profile_code: f64,     // code representing propellant profile
+    pub barrel_fatigue: f64,        // cumulative barrel fatigue index
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -128,7 +132,7 @@ pub fn simulate_shot(val: JsValue) -> Result<JsValue, JsValue> {
             FRAME_BUFFER.push(frame.wall_heat_loss);
             FRAME_BUFFER.push(frame.fouling_index);
             FRAME_BUFFER.push(frame.burn_profile_code);
-            FRAME_BUFFER.push(0.0); // padding
+            FRAME_BUFFER.push(frame.barrel_fatigue);
         }
 
         let wasm_result = ShotResultWasm {
@@ -165,6 +169,8 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
             custom_mix_active: None,
             saltpeter_ratio: None,
             charcoal_ratio: None,
@@ -194,6 +200,8 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
             custom_mix_active: None,
             saltpeter_ratio: None,
             charcoal_ratio: None,
@@ -222,6 +230,8 @@ mod tests {
             seed: 42,
             persistent_fouling: 0.0,
             propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
             custom_mix_active: None,
             saltpeter_ratio: None,
             charcoal_ratio: None,
@@ -259,6 +269,8 @@ mod tests {
                 seed: 100 + i, // different seeds
                 persistent_fouling: 0.0,
                 propellant_profile: "steady".to_string(),
+                persistent_fatigue: 0.0,
+                flaw_seed: 42,
                 custom_mix_active: None,
                 saltpeter_ratio: None,
                 charcoal_ratio: None,
@@ -294,6 +306,8 @@ mod tests {
                 seed: 100 + i,
                 persistent_fouling: 0.0,
                 propellant_profile: "steady".to_string(),
+                persistent_fatigue: 0.0,
+                flaw_seed: 42,
                 custom_mix_active: None,
                 saltpeter_ratio: None,
                 charcoal_ratio: None,
@@ -312,6 +326,47 @@ mod tests {
         }
         assert!(misfire_count <= 40, "Misfire count is {}/100, expected at most 40 with parchment cover in heavy rain", misfire_count);
         assert!(success_count >= 60);
+    }
+
+    #[test]
+    fn test_fatigue_accumulation_and_rupture() {
+        let input_base = ShotInput {
+            barrel_material: "cast_bronze".to_string(),
+            propellant_type: "corned".to_string(),
+            refinement_level: 80.0,
+            projectile_type: "lead_ball".to_string(),
+            sealing_quality: "tow".to_string(),
+            weather_humidity: 10.0,
+            weather_wind: 0.0,
+            weather_rain: 0.0,
+            priming_quality: 100.0,
+            seed: 42,
+            persistent_fouling: 0.0,
+            propellant_profile: "steady".to_string(),
+            persistent_fatigue: 0.0,
+            flaw_seed: 42,
+            custom_mix_active: None,
+            saltpeter_ratio: None,
+            charcoal_ratio: None,
+            sulfur_ratio: None,
+            charcoal_source: None,
+            saltpeter_purity: None,
+            weather_protection: None,
+        };
+
+        // First shot (0 fatigue)
+        let result1 = run_simulation(input_base.clone());
+        let fatigue1 = result1.frames.last().unwrap().barrel_fatigue;
+        assert!(fatigue1 > 0.0, "Fatigue must increase from 0.0");
+        assert!(!result1.outcomes.contains(&"barrel_failure".to_string()));
+
+        // Firing with a barrel already at 99% fatigue should trigger rupture
+        let mut input_stressed = input_base;
+        input_stressed.persistent_fatigue = 0.99;
+        let result2 = run_simulation(input_stressed);
+        let fatigue2 = result2.frames.last().unwrap().barrel_fatigue;
+        assert_eq!(fatigue2, 1.0, "Fatigue should be clamped to 1.0");
+        assert!(result2.outcomes.contains(&"barrel_failure".to_string()), "Fatigued barrel must rupture");
     }
 }
 

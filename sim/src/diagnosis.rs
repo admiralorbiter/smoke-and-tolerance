@@ -206,6 +206,17 @@ pub fn generate_result(
         });
     }
 
+    if input.persistent_fatigue > 0.4 {
+        diagnosis.push(DiagnosisEntry {
+            severity: "warning".to_string(),
+            title: "Severe Barrel Fatigue".to_string(),
+            explanation: format!(
+                "The barrel is heavily fatigued ({:.1}% damage). Micro-cracks are bleeding pressure and warping the bore, reducing muzzle velocity and increasing aim deviation. Repair the barrel immediately in the workshop.",
+                input.persistent_fatigue * 100.0
+            ),
+        });
+    }
+
     if input.weather_humidity > 50.0 {
         diagnosis.push(DiagnosisEntry {
             severity: "info".to_string(),

@@ -151,6 +151,25 @@ When the user locks in a custom batch, the standard propellant profiles are over
     $$F_{soot} = \text{clamp}\left(0.05, 0.60, 0.15 \cdot \frac{C_c}{0.15} \cdot W_{soot}\right)$$
     Where $W_{soot}$ is the wood soot factor (Willow: 0.4, Alder: 1.0, Oak: 2.0).
 
+### 8. Cumulative Barrel Fatigue & Degradation Mechanics
+Persistent fatigue damage ($D_f$, from $0.0$ to $1.0$) accumulates over successive shots. On each shot, the damage increment $\Delta D_f$ is calculated:
+*   **Elastic cyclic stress ($\sigma_{peak} \le \sigma_{yield}$):**
+    $$\Delta D_{elastic} = 0.005$$
+*   **Plastic deformation stress ($\sigma_{peak} > \sigma_{yield}$):**
+    $$\Delta D_{plastic} = 0.005 + C_{plastic} \cdot \left( \frac{\sigma_{peak} - \sigma_{yield}}{\sigma_{ultimate} - \sigma_{yield}} \right)^2$$
+    Where $C_{plastic}$ is material-dependent:
+    *   `bamboo`: $0.25$
+    *   `wrought_iron`: $0.15$
+    *   `cast_bronze`: $0.10$
+*   **Chemical Corrosion:** Soot accumulation ($F_{soot}$) corrodes the bore:
+    $$\Delta D_{corrosion} = 0.02 \cdot \min\left(1.0, \frac{F_{soot}}{0.015}\right) \cdot \left(1.0 + \text{sulfurRatio}\right) \cdot \left(1.0 + H_{hum} \cdot 0.5\right)$$
+*   **Active Flaw Feedback ($K_{flaw}$):** Fatigue propagates micro-cracks that concentrate stress on future shots:
+    $$K_{flaw} = K_{flaw,0} \cdot (1.0 + 0.6 \cdot D_f)$$
+*   **Aim Jitter Scale:** Deformed bores amplify projectile rattle:
+    $$\text{jitter} = \text{jitter}_0 \cdot (1.0 + 2.0 \cdot D_f)$$
+*   **Pressure Leakage:** When fatigue is critical ($D_f > 0.4$), cracks leak gas, scaling windage:
+    $$M_{gap} = 1.0 + 1.5 \cdot D_f$$
+
 ---
 
 
@@ -181,7 +200,7 @@ The layout of the elements within the stride is:
 | `16` | `wall_heat_loss` | `f64` | Convective energy lost to barrel walls (J) |
 | `17` | `fouling_index` | `f64` | Persistent fouling index (0-1) |
 | `18` | `burn_profile_code` | `f64` | Burn profile ID code |
-| `19` | `padding` | `f64` | Padding float for 64-bit boundary alignment |
+| `19` | `barrel_fatigue` | `f64` | Cumulative barrel fatigue index (0.0 to 1.0) |
 
 
 ---

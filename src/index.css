@@ -61,8 +61,8 @@ header p {
 }
 
 main {
-  display: grid;
-  grid-template-columns: 1fr 400px;
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
   max-width: 1600px;
   margin: 0 auto;
@@ -71,10 +71,108 @@ main {
   flex-grow: 1;
 }
 
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 2rem;
+  width: 100%;
+  align-items: start;
+}
+
+.workspace-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.view-toggle-bar {
+  position: sticky;
+  top: 0;
+  z-index: 150;
+  background-color: #0c0a09; /* matches body background exactly */
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-ink);
+}
+
+.sidebar {
+  position: sticky;
+  top: 5.5rem; /* leaves room for sticky view-toggle-bar */
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-self: start;
+}
+
 @media (max-width: 1100px) {
-  main {
+  .workspace-grid {
     grid-template-columns: 1fr;
   }
+  .sidebar {
+    position: static;
+  }
+}
+
+/* Active-Simulation Glowing Borders */
+.canvas-card {
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* Setup/Ignition stage: slow breathing amber glow */
+.canvas-card.glow-setup {
+  border-color: #ff9f1c !important;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 159, 28, 0.25), 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  animation: breathing-amber 2s infinite ease-in-out;
+}
+
+@keyframes breathing-amber {
+  0%, 100% { box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 8px rgba(255, 159, 28, 0.15), 0 10px 30px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 159, 28, 0.45), 0 10px 30px rgba(0, 0, 0, 0.5); }
+}
+
+/* Pressure/Movement/Flight stage: rapid pulsing orange-red glow */
+.canvas-card.glow-pressure {
+  border-color: #d94e34 !important;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(217, 78, 52, 0.35), 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  animation: pulsing-red 0.4s infinite ease-in-out;
+}
+
+@keyframes pulsing-red {
+  0%, 100% { box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 10px rgba(217, 78, 52, 0.25), 0 10px 30px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(217, 78, 52, 0.65), 0 10px 30px rgba(0, 0, 0, 0.5); }
+}
+
+/* Rupture stage: blinding white flash decaying to smoky gray */
+.canvas-card.glow-rupture {
+  animation: rupture-flash 2.5s ease-out forwards;
+}
+
+@keyframes rupture-flash {
+  0% {
+    border-color: #ffffff;
+    box-shadow: inset 0 0 50px rgba(255, 255, 255, 1.0), 0 0 60px rgba(255, 255, 255, 0.9), 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+  10% {
+    border-color: #ff3c00;
+    box-shadow: inset 0 0 40px rgba(255, 60, 0, 0.6), 0 0 35px rgba(255, 60, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+  100% {
+    border-color: #5c4e43;
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 0 10px rgba(92, 78, 67, 0.2), 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Era Transition Fade-and-slide animation */
+.fade-slide-container {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.fade-slide-enter {
+  opacity: 0;
+  transform: translateY(12px);
 }
 
 .sim-container {
@@ -744,6 +842,34 @@ footer a {
 
 #chem-charts-canvas {
   background-color: #0c0a09;
+}
+
+.telemetry-charts-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.chart-container {
+  background-color: #0c0a09;
+  border: 1px solid var(--border-ink);
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.chart-container h4 {
+  margin: 0 0 0.75rem 0;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--text-bright);
+  border-bottom: 1px solid rgba(140, 118, 98, 0.25);
+  padding-bottom: 0.25rem;
+}
+
+.chart-canvas-wrapper {
+  width: 100%;
+  position: relative;
 }
 
 /* --- ERA TIMELINE STYLES --- */

@@ -20,6 +20,8 @@ class LaboratoryApp {
   private isEraSwitchLoad: boolean = false;
   private hasFiredShot: boolean = false;
   private persistentFouling: number = 0.0;
+  private persistentFatigue: number = 0.0;
+  private flawSeed: number = Math.floor(Math.random() * 1000000);
   private activeEra: string = 'hand_cannon';
 
   private activeWeatherProtection: string = 'none';
@@ -52,6 +54,7 @@ class LaboratoryApp {
       this.worker.onmessage = (e: MessageEvent) => {
         const { success, result, rawBuffer, error } = e.data;
         this.controls.setFiringState(false);
+        this.setSimulationActive(false);
 
         if (!success) {
           console.error('Simulation worker error:', error);
@@ -68,10 +71,13 @@ class LaboratoryApp {
         // Update timeline with frames
         this.timeline.setFrames(frames);
         
-        // Extract updated fouling state from final frame (if not initial dummy shot)
+        // Extract updated fouling and fatigue state from final frame (if not initial dummy shot)
         if (!this.isInitialLoad && frames.length > 0) {
           this.persistentFouling = frames[frames.length - 1].foulingIndex;
           this.updateFoulingMeter();
+          
+          this.persistentFatigue = frames[frames.length - 1].barrelFatigue;
+          this.updateFatigueMeter();
         }
         
         if (this.isInitialLoad) {
@@ -157,6 +163,7 @@ class LaboratoryApp {
             !this.timeline.isPlaying,
             this.shotHistory
           );
+          this.updateGlowingBorders(frame);
           this.updateChemistryDashboard(frame, this.currentInputs);
           this.renderCharts(frames, index, this.shotHistory);
           AudioManager.getInstance().handleFrame(
@@ -218,15 +225,101 @@ class LaboratoryApp {
       this.resetCustomBatch();
     });
 
+    // 6. X-Ray View & Repair Listeners
+    const chkXrayMode = document.getElementById('chk-xray-mode') as HTMLInputElement;
+    chkXrayMode?.addEventListener('change', () => {
+      const active = chkXrayMode.checked;
+      this.renderer.setXrayMode(active);
+      
+      // Redraw immediately if we have frames loaded
+      if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
+        const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
+        if (frame) {
+          this.renderer.drawFrame(
+            frame,
+            this.currentInputs,
+            !this.timeline.isPlaying,
+            this.shotHistory
+          );
+        }
+      }
+    });
+
+    const btnRepair = document.getElementById('btn-repair-barrel');
+    btnRepair?.addEventListener('click', () => {
+      this.repairBarrel();
+    });
+
+    // 7. View Layout Toggle Listeners
+    const btnViewSplit = document.getElementById('btn-view-split') as HTMLButtonElement;
+    const btnViewCutaway = document.getElementById('btn-view-cutaway') as HTMLButtonElement;
+    const btnViewTrajectory = document.getElementById('btn-view-trajectory') as HTMLButtonElement;
+    
+    const cutawayCard = document.querySelector('.cutaway-card') as HTMLDivElement;
+    const trajectoryCard = document.querySelector('.trajectory-card') as HTMLDivElement;
+
+    const selectLayout = (layout: 'split' | 'cutaway' | 'trajectory') => {
+      btnViewSplit?.classList.toggle('active', layout === 'split');
+      btnViewCutaway?.classList.toggle('active', layout === 'cutaway');
+      btnViewTrajectory?.classList.toggle('active', layout === 'trajectory');
+
+      if (layout === 'split') {
+        if (cutawayCard) cutawayCard.style.display = 'block';
+        if (trajectoryCard) trajectoryCard.style.display = 'block';
+      } else if (layout === 'cutaway') {
+        if (cutawayCard) cutawayCard.style.display = 'block';
+        if (trajectoryCard) trajectoryCard.style.display = 'none';
+      } else if (layout === 'trajectory') {
+        if (cutawayCard) cutawayCard.style.display = 'none';
+        if (trajectoryCard) trajectoryCard.style.display = 'block';
+      }
+
+      // Redraw immediately so everything is centered and scaled properly
+      if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
+        const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
+        if (frame) {
+          this.renderer.drawFrame(
+            frame,
+            this.currentInputs,
+            !this.timeline.isPlaying,
+            this.shotHistory
+          );
+        }
+      }
+    };
+
+    btnViewSplit?.addEventListener('click', () => selectLayout('split'));
+    btnViewCutaway?.addEventListener('click', () => selectLayout('cutaway'));
+    btnViewTrajectory?.addEventListener('click', () => selectLayout('trajectory'));
 
     // Initialize with hand_cannon defaults
     this.activeEra = 'hand_cannon';
     const activeConfig = ERA_REGISTRY[this.activeEra];
     this.controls.applyEraRestrictions(activeConfig);
     this.updateCodexPanel(activeConfig);
+    this.updateFatigueMeter();
+
+    // Bind interactive lens tooltips mouseover
+    const cutawayCanvas = document.getElementById('sim-cutaway-canvas') as HTMLCanvasElement;
+    cutawayCanvas?.addEventListener('mousemove', (e) => {
+      const rect = cutawayCanvas.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * cutawayCanvas.width;
+      const mouseY = ((e.clientY - rect.top) / rect.height) * cutawayCanvas.height;
+      const tooltip = this.renderer.getTooltipAt(mouseX, mouseY);
+      if (tooltip) {
+        cutawayCanvas.title = tooltip;
+        cutawayCanvas.style.cursor = 'help';
+      } else {
+        cutawayCanvas.title = '';
+        cutawayCanvas.style.cursor = 'default';
+      }
+    });
 
     // Run an initial blank shot to show the static device in setup
     this.handleInitialState();
+
+    // Start continuous 60fps animation loop for sparkles and active glows
+    this.startAnimationLoop();
   }
 
   private selectTab(activeTab: 'instruments' | 'ledger' | 'charts' | 'codex') {
@@ -270,6 +363,8 @@ class LaboratoryApp {
     const initialInputs = this.controls.getInputs();
     initialInputs.primingQuality = 100.0;
     initialInputs.persistentFouling = this.persistentFouling;
+    initialInputs.persistentFatigue = this.persistentFatigue;
+    initialInputs.flawSeed = this.flawSeed;
     initialInputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
       initialInputs.customMixActive = true;
@@ -293,6 +388,8 @@ class LaboratoryApp {
 
     this.hasFiredShot = true;
     inputs.persistentFouling = this.persistentFouling;
+    inputs.persistentFatigue = this.persistentFatigue;
+    inputs.flawSeed = this.flawSeed;
     inputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
       inputs.customMixActive = true;
@@ -300,6 +397,7 @@ class LaboratoryApp {
     }
     this.currentInputs = inputs;
     this.controls.setFiringState(true);
+    this.setSimulationActive(true);
     inputs.primingQuality = 100.0;
     AudioManager.getInstance().updateAmbientWind(inputs.weatherWind);
     this.worker.postMessage({ input: inputs });
@@ -476,10 +574,17 @@ class LaboratoryApp {
     }
   }
 
-  private renderCharts(frames: ShotFrame[], currentIndex: number, history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []) {
-    const canvas = document.getElementById('chem-charts-canvas') as HTMLCanvasElement;
-    if (!canvas) return;
-
+  private renderSingleChart(
+    canvas: HTMLCanvasElement,
+    color: string,
+    valKey: keyof ShotFrame | null,
+    maxVal: number,
+    unit: string,
+    isMass: boolean,
+    frames: ShotFrame[],
+    currentIndex: number,
+    history: Array<{ inputs: ShotInput; frames: ShotFrame[] }>
+  ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -492,21 +597,218 @@ class LaboratoryApp {
 
     if (frames.length === 0) return;
 
-    // Grid coordinates layout
-    const paddingLeft = 45;
-    const spacing = 35;
-    const plotW = 220;
-    const plotH = 150;
-    const plotY = 50;
+    // Drawing bounds inside the canvas
+    const paddingLeft = 55;
+    const paddingRight = 20;
+    const paddingTop = 15;
+    const paddingBottom = 25;
 
-    interface ChartPlot {
-      title: string;
-      color: string;
-      valKey?: keyof ShotFrame;
-      maxVal: number;
-      unit: string;
-      isMass: boolean;
+    const plotX = paddingLeft;
+    const plotY = paddingTop;
+    const plotW = w - paddingLeft - paddingRight;
+    const plotH = h - paddingTop - paddingBottom;
+
+    // Draw bounding box
+    ctx.strokeStyle = '#2b241e';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(plotX, plotY, plotW, plotH);
+
+    // Draw dynamic scale lines (dashed horizontal lines)
+    ctx.strokeStyle = '#1b1612';
+    ctx.beginPath();
+    for (let yRatio = 0.25; yRatio < 1.0; yRatio += 0.25) {
+      const y = plotY + plotH - yRatio * plotH;
+      ctx.moveTo(plotX, y);
+      ctx.lineTo(plotX + plotW, y);
     }
+    ctx.stroke();
+
+    // Subplot boundary readouts (Y-axis labels)
+    ctx.fillStyle = '#5c4b3c';
+    ctx.font = 'normal 9px Share Tech Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(maxVal.toFixed(0) + unit, plotX - 6, plotY + 6);
+    ctx.fillText('0' + unit, plotX - 6, plotY + plotH);
+    ctx.textAlign = 'left'; // reset
+
+    // If no shot has been fired, render centered overlay with awaiting alchemical message
+    if (!this.hasFiredShot) {
+      ctx.fillStyle = 'rgba(12, 10, 9, 0.8)';
+      ctx.fillRect(plotX, plotY, plotW, plotH);
+
+      ctx.fillStyle = '#bca085';
+      ctx.font = 'normal 11px Cinzel, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🜔 AWAITING TEST FIRE... 🜔', plotX + plotW / 2, plotY + plotH / 2 - 6);
+      
+      ctx.fillStyle = '#8f7762';
+      ctx.font = 'normal 8px Share Tech Mono, monospace';
+      ctx.fillText('LAUNCH THE DEVICE TO PLOT TELEMETRY', plotX + plotW / 2, plotY + plotH / 2 + 10);
+      ctx.textAlign = 'left'; // restore default
+      return;
+    }
+
+    // Render history curves (if any) with opacity decay
+    const colorMap: Record<string, string> = {
+      '#d94e34': '217, 78, 52',
+      '#ffb703': '255, 183, 3',
+      '#a8947b': '168, 148, 123',
+      '#e6c387': '230, 195, 135'
+    };
+
+    if (history && history.length > 0) {
+      history.forEach((histItem, j) => {
+        const d = history.length - 1 - j;
+        const lineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
+        const gasLineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
+
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        
+        ctx.beginPath();
+        histItem.frames.forEach((frame, idx) => {
+          const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
+          if (isMass) {
+            const mUnburned = frame.unburnedMass * 1000;
+            const y = plotY + plotH - (mUnburned / maxVal) * plotH;
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          } else {
+            const val = frame[valKey!] as number;
+            const y = plotY + plotH - (val / maxVal) * plotH;
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+        });
+        ctx.strokeStyle = isMass ? `rgba(168, 148, 123, ${lineOpacity})` : `rgba(${colorMap[color] || '140, 118, 98'}, ${lineOpacity})`;
+        ctx.stroke();
+
+        // If mass plot, render chamber gas curve on top in muted gold dash
+        if (isMass) {
+          ctx.beginPath();
+          histItem.frames.forEach((frame, idx) => {
+            const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
+            const mGas = frame.gasMass * 1000;
+            const y = plotY + plotH - (mGas / maxVal) * plotH;
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = `rgba(230, 195, 135, ${gasLineOpacity})`;
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+    }
+
+    // Render current chart data line
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    frames.forEach((frame, idx) => {
+      const x = plotX + (idx / (frames.length - 1)) * plotW;
+      if (isMass) {
+        const mUnburned = frame.unburnedMass * 1000; // grams
+        const y = plotY + plotH - (mUnburned / maxVal) * plotH;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      } else {
+        const val = frame[valKey!] as number;
+        const y = plotY + plotH - (val / maxVal) * plotH;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+    });
+    ctx.strokeStyle = isMass ? '#a8947b' : color;
+    ctx.stroke();
+
+    // If mass plot, render chamber gas curve on top in gold
+    if (isMass) {
+      ctx.beginPath();
+      frames.forEach((frame, idx) => {
+        const x = plotX + (idx / (frames.length - 1)) * plotW;
+        const mGas = frame.gasMass * 1000; // grams
+        const y = plotY + plotH - (mGas / maxVal) * plotH;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = '#e6c387';
+      ctx.stroke();
+    }
+
+    // Draw current scrub timeline indicator line
+    const scrubX = plotX + (currentIndex / (frames.length - 1)) * plotW;
+    ctx.strokeStyle = 'rgba(207, 168, 107, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(scrubX, plotY);
+    ctx.lineTo(scrubX, plotY + plotH);
+    ctx.stroke();
+
+    // Display telemetry value at the scrub position
+    if (currentIndex < frames.length) {
+      const curFrame = frames[currentIndex];
+      let valText = '';
+
+      // Find corresponding previous frame (immediate last shot in history)
+      let prevFrame: ShotFrame | null = null;
+      const prevItem = history[history.length - 1];
+      if (prevItem && prevItem.frames.length > 0) {
+        const ratio = currentIndex / (frames.length - 1);
+        const prevIndex = Math.round(ratio * (prevItem.frames.length - 1));
+        prevFrame = prevItem.frames[prevIndex] || null;
+      }
+
+      if (isMass) {
+        const curPowder = curFrame.unburnedMass * 1000;
+        const curGas = curFrame.gasMass * 1000;
+        valText = `Powder: ${curPowder.toFixed(1)}g / Gas: ${curGas.toFixed(1)}g`;
+        if (prevFrame) {
+          const prevPowder = prevFrame.unburnedMass * 1000;
+          const prevGas = prevFrame.gasMass * 1000;
+          valText += ` (Prev Powder: ${prevPowder.toFixed(1)}g / Gas: ${prevGas.toFixed(1)}g)`;
+        }
+      } else {
+        const val = curFrame[valKey!] as number;
+        valText = val.toFixed(1) + unit;
+        if (prevFrame) {
+          const prevVal = prevFrame[valKey!] as number;
+          valText += ` (Prev: ${prevVal.toFixed(1)}${unit})`;
+        }
+      }
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(207, 168, 107, 0.9)';
+      ctx.font = 'normal 9px Share Tech Mono, monospace';
+      
+      // Adjust alignment depending on right boundary to prevent visual clipping
+      let textX = scrubX + 6;
+      if (scrubX > plotX + plotW - 120) {
+        ctx.textAlign = 'right';
+        textX = scrubX - 6;
+      } else {
+        ctx.textAlign = 'left';
+      }
+      ctx.fillText(valText, textX, plotY + plotH - 6);
+      ctx.restore();
+    }
+
+    // Subplot total duration label
+    const totalTimeMs = frames[frames.length - 1].timeMs;
+    ctx.fillStyle = '#5c4b3c';
+    ctx.font = 'normal 9px Share Tech Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Duration: ${totalTimeMs.toFixed(1)}ms`, plotX + plotW, plotY + plotH + 15);
+    ctx.textAlign = 'left';
+  }
+
+  private renderCharts(frames: ShotFrame[], currentIndex: number, history: Array<{ inputs: ShotInput; frames: ShotFrame[] }> = []) {
+    const canvasPressure = document.getElementById('chart-pressure') as HTMLCanvasElement;
+    const canvasTemp = document.getElementById('chart-temp') as HTMLCanvasElement;
+    const canvasMass = document.getElementById('chart-mass') as HTMLCanvasElement;
+
+    if (!canvasPressure || !canvasTemp || !canvasMass) return;
+
+    if (frames.length === 0) return;
 
     const maxPressureCur = Math.max(...frames.map(f => f.pressure));
     const maxTempCur = Math.max(...frames.map(f => f.temperature));
@@ -522,241 +824,29 @@ class LaboratoryApp {
       });
     }
 
-    const plots: ChartPlot[] = [
-      {
-        title: 'PRESSURE (MPa)',
-        color: '#d94e34',
-        valKey: 'pressure',
-        maxVal: Math.max(30.0, Math.ceil((maxPressure * 1.1) / 5) * 5),
-        unit: 'MPa',
-        isMass: false
-      },
-      {
-        title: 'TEMPERATURE (K)',
-        color: '#ffb703',
-        valKey: 'temperature',
-        maxVal: Math.max(2500.0, Math.ceil((maxTemp * 1.05) / 100) * 100),
-        unit: 'K',
-        isMass: false
-      },
-      {
-        title: 'MASS BUDGET (g)',
-        color: '#e6c387',
-        maxVal: 15.0,
-        unit: 'g',
-        isMass: true
-      }
-    ];
+    const maxPressureVal = Math.max(30.0, Math.ceil((maxPressure * 1.1) / 5) * 5);
+    const maxTempVal = Math.max(2500.0, Math.ceil((maxTemp * 1.05) / 100) * 100);
 
-    plots.forEach((plot, pIdx) => {
-      const plotX = paddingLeft + pIdx * (plotW + spacing);
-
-      // Draw bounding box
-      ctx.strokeStyle = '#2b241e';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(plotX, plotY, plotW, plotH);
-
-      // Draw dynamic scale lines (dashed horizontal lines)
-      ctx.strokeStyle = '#1b1612';
-      ctx.beginPath();
-      for (let yRatio = 0.25; yRatio < 1.0; yRatio += 0.25) {
-        const y = plotY + plotH - yRatio * plotH;
-        ctx.moveTo(plotX, y);
-        ctx.lineTo(plotX + plotW, y);
-      }
-      ctx.stroke();
-
-      // Subplot title
-      ctx.fillStyle = '#bca085';
-      ctx.font = 'normal 9px Cinzel, serif';
-      ctx.fillText(plot.title, plotX, plotY - 8);
-
-      // Subplot boundary readouts
-      ctx.fillStyle = '#5c4b3c';
-      ctx.font = 'normal 8px Share Tech Mono, monospace';
-      ctx.fillText(plot.maxVal.toFixed(0) + plot.unit, plotX - 35, plotY + 6);
-      ctx.fillText('0' + plot.unit, plotX - 22, plotY + plotH);
-
-      // If no shot has been fired, skip drawing telemetry lines and scrub bars
-      if (!this.hasFiredShot) {
-        return;
-      }
-
-      // Render history curves (if any) with opacity decay
-      const colorMap: Record<string, string> = {
-        '#d94e34': '217, 78, 52',
-        '#ffb703': '255, 183, 3',
-        '#a8947b': '168, 148, 123',
-        '#e6c387': '230, 195, 135'
-      };
-
-      if (history && history.length > 0) {
-        history.forEach((histItem, j) => {
-          const d = history.length - 1 - j;
-          // Scale opacity down for older history entries (decay effect)
-          const lineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
-          const gasLineOpacity = Math.max(0.04, 0.45 * Math.pow(0.5, d));
-
-          ctx.save();
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 3]);
-          
-          ctx.beginPath();
-          histItem.frames.forEach((frame, idx) => {
-            const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
-            if (plot.isMass) {
-              const mUnburned = frame.unburnedMass * 1000;
-              const y = plotY + plotH - (mUnburned / plot.maxVal) * plotH;
-              if (idx === 0) ctx.moveTo(x, y);
-              else ctx.lineTo(x, y);
-            } else {
-              const val = frame[plot.valKey!] as number;
-              const y = plotY + plotH - (val / plot.maxVal) * plotH;
-              if (idx === 0) ctx.moveTo(x, y);
-              else ctx.lineTo(x, y);
-            }
-          });
-          ctx.strokeStyle = plot.isMass ? `rgba(168, 148, 123, ${lineOpacity})` : `rgba(${colorMap[plot.color] || '140, 118, 98'}, ${lineOpacity})`;
-          ctx.stroke();
-
-          // If mass plot, render chamber gas curve on top in muted gold dash
-          if (plot.isMass) {
-            ctx.beginPath();
-            histItem.frames.forEach((frame, idx) => {
-              const x = plotX + (idx / (histItem.frames.length - 1)) * plotW;
-              const mGas = frame.gasMass * 1000;
-              const y = plotY + plotH - (mGas / plot.maxVal) * plotH;
-              if (idx === 0) ctx.moveTo(x, y);
-              else ctx.lineTo(x, y);
-            });
-            ctx.strokeStyle = `rgba(230, 195, 135, ${gasLineOpacity})`;
-            ctx.stroke();
-          }
-          ctx.restore();
-        });
-      }
-
-      // Render current chart data line
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      frames.forEach((frame, idx) => {
-        const x = plotX + (idx / (frames.length - 1)) * plotW;
-        if (plot.isMass) {
-          // Draw unburned powder in gray
-          const mUnburned = frame.unburnedMass * 1000; // grams
-          const y = plotY + plotH - (mUnburned / plot.maxVal) * plotH;
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        } else {
-          const val = frame[plot.valKey!] as number;
-          const y = plotY + plotH - (val / plot.maxVal) * plotH;
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-      });
-      ctx.strokeStyle = plot.isMass ? '#a8947b' : plot.color;
-      ctx.stroke();
-
-      // If mass plot, render chamber gas curve on top in gold
-      if (plot.isMass) {
-        ctx.beginPath();
-        frames.forEach((frame, idx) => {
-          const x = plotX + (idx / (frames.length - 1)) * plotW;
-          const mGas = frame.gasMass * 1000; // grams
-          const y = plotY + plotH - (mGas / plot.maxVal) * plotH;
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.strokeStyle = '#e6c387';
-        ctx.stroke();
-      }
-
-      // Draw current scrub timeline indicator line
-      const scrubX = plotX + (currentIndex / (frames.length - 1)) * plotW;
-      ctx.strokeStyle = 'rgba(207, 168, 107, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(scrubX, plotY);
-      ctx.lineTo(scrubX, plotY + plotH);
-      ctx.stroke();
-
-      // Display telemetry value at the scrub position
-      if (currentIndex < frames.length) {
-        const curFrame = frames[currentIndex];
-        let valText = '';
-
-        // Find corresponding previous frame (immediate last shot in history)
-        let prevFrame: ShotFrame | null = null;
-        const prevItem = history[history.length - 1];
-        if (prevItem && prevItem.frames.length > 0) {
-          const ratio = currentIndex / (frames.length - 1);
-          const prevIndex = Math.round(ratio * (prevItem.frames.length - 1));
-          prevFrame = prevItem.frames[prevIndex] || null;
-        }
-
-        if (plot.isMass) {
-          const curPowder = curFrame.unburnedMass * 1000;
-          const curGas = curFrame.gasMass * 1000;
-          valText = `Powder: ${curPowder.toFixed(1)}g / Gas: ${curGas.toFixed(1)}g`;
-          if (prevFrame) {
-            const prevPowder = prevFrame.unburnedMass * 1000;
-            const prevGas = prevFrame.gasMass * 1000;
-            valText += ` (Prev Powder: ${prevPowder.toFixed(1)}g / Gas: ${prevGas.toFixed(1)}g)`;
-          }
-        } else {
-          const val = curFrame[plot.valKey!] as number;
-          valText = val.toFixed(1) + plot.unit;
-          if (prevFrame) {
-            const prevVal = prevFrame[plot.valKey!] as number;
-            valText += ` (Prev: ${prevVal.toFixed(1)}${plot.unit})`;
-          }
-        }
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(207, 168, 107, 0.9)';
-        ctx.font = 'normal 8px Share Tech Mono, monospace';
-        
-        // Adjust alignment depending on right boundary to prevent visual clipping
-        let textX = scrubX + 4;
-        if (scrubX > plotX + plotW - 80) {
-          ctx.textAlign = 'right';
-          textX = scrubX - 4;
-        } else {
-          ctx.textAlign = 'left';
-        }
-        ctx.fillText(valText, textX, plotY + plotH - 5);
-        ctx.restore();
-      }
-    });
-
-    if (!this.hasFiredShot) {
-      // Render centered overlay with awaiting alchemical message
-      ctx.fillStyle = 'rgba(12, 10, 9, 0.8)';
-      const fullGridWidth = plots.length * plotW + (plots.length - 1) * spacing;
-      ctx.fillRect(paddingLeft, plotY, fullGridWidth, plotH);
-
-      ctx.fillStyle = '#bca085';
-      ctx.font = 'normal 11px Cinzel, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🜔 AWAITING TEST FIRE... 🜔', paddingLeft + fullGridWidth / 2, plotY + plotH / 2 - 8);
-      
-      ctx.fillStyle = '#8f7762';
-      ctx.font = 'normal 8px Share Tech Mono, monospace';
-      ctx.fillText('LAUNCH THE DEVICE TO CAPTURE AND PLOT ACTIVE COMBUSTION TELEMETRY', paddingLeft + fullGridWidth / 2, plotY + plotH / 2 + 12);
-      ctx.textAlign = 'left'; // restore default
-      return;
-    }
-
-    // Subplot total duration label
-    const totalTimeMs = frames[frames.length - 1].timeMs;
-    ctx.fillStyle = '#5c4b3c';
-    ctx.font = 'normal 9px Share Tech Mono, monospace';
-    ctx.fillText(`Duration: ${totalTimeMs.toFixed(1)}ms`, w - 110, plotY + plotH + 15);
+    this.renderSingleChart(canvasPressure, '#d94e34', 'pressure', maxPressureVal, 'MPa', false, frames, currentIndex, history);
+    this.renderSingleChart(canvasTemp, '#ffb703', 'temperature', maxTempVal, 'K', false, frames, currentIndex, history);
+    this.renderSingleChart(canvasMass, '#e6c387', null, 15.0, 'g', true, frames, currentIndex, history);
   }
 
   private switchEra(eraId: string) {
     if (this.activeEra === eraId) return;
     this.activeEra = eraId;
+
+    // Era transition animation
+    const containers = document.querySelectorAll('.fade-slide-container');
+    containers.forEach(el => {
+      el.classList.add('fade-slide-enter');
+      (el as HTMLElement).offsetHeight; // trigger reflow
+    });
+    setTimeout(() => {
+      containers.forEach(el => {
+        el.classList.remove('fade-slide-enter');
+      });
+    }, 50);
 
     // Toggle active timeline button
     const eraButtons = document.querySelectorAll('.era-btn');
@@ -792,6 +882,10 @@ class LaboratoryApp {
     // Switch to Codex tab so the user can read the background
     this.selectTab('codex');
 
+    this.persistentFatigue = 0.0;
+    this.flawSeed = Math.floor(Math.random() * 1000000);
+    this.updateFatigueMeter();
+
     // Trigger initial setup simulation to immediately update graphics/instruments
     this.isEraSwitchLoad = true;
     this.handleInitialState();
@@ -814,6 +908,151 @@ class LaboratoryApp {
     if (unreliable) unreliable.textContent = config.codex.unreliable;
     if (nextStep) nextStep.textContent = config.codex.nextStep;
     if (challenge) challenge.textContent = config.codex.challenge;
+  }
+
+  private repairBarrel() {
+    this.persistentFatigue = 0.0;
+    this.updateFatigueMeter();
+    
+    // Decouple/clear comparison history
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+
+    // Re-seed based on material
+    const material = this.controls.getInputs().barrelMaterial;
+    if (material === 'bamboo') {
+      this.flawSeed = Math.floor(Math.random() * 1000000);
+    } else {
+      // Metal: minor adjustment/perturbation
+      this.flawSeed = (this.flawSeed + 37) % 1000000;
+    }
+
+    // Play clean bore sound for feedback
+    AudioManager.getInstance().playCleanBore();
+    
+    // Switch to instruments
+    this.selectTab('instruments');
+
+    // Refire current settings (initial setup shot) as a static layout update
+    this.isEraSwitchLoad = true;
+    this.handleInitialState();
+  }
+
+  private updateFatigueMeter() {
+    const bar = document.getElementById('fatigue-meter-bar') as HTMLDivElement;
+    const text = document.getElementById('fatigue-meter-text') as HTMLSpanElement;
+    if (bar && text) {
+      const percentage = Math.min(100, Math.max(0, this.persistentFatigue * 100));
+      bar.style.width = `${percentage}%`;
+      
+      let statusText = 'PRISTINE (0%)';
+      if (percentage >= 100) {
+        statusText = '💥 CATASTROPHIC RUPTURE (100%)';
+        bar.style.background = '#ff3c00';
+      } else if (percentage >= 80) {
+        statusText = `CRITICAL DISTRESS (${percentage.toFixed(0)}%)`;
+        bar.style.background = '#ff3c00';
+      } else if (percentage >= 50) {
+        statusText = `HEAVILY FATIGUED (${percentage.toFixed(0)}%)`;
+        bar.style.background = '#ff9f1c';
+      } else if (percentage >= 20) {
+        statusText = `DEFORMED / MICRO-FISSURES (${percentage.toFixed(0)}%)`;
+        bar.style.background = '#d94e34';
+      } else if (percentage > 0) {
+        statusText = `STRESSED (${percentage.toFixed(0)}%)`;
+        bar.style.background = '#8c7662';
+      } else {
+        bar.style.background = 'linear-gradient(90deg, #3a322c 0%, #1c1815 100%)';
+      }
+      text.textContent = statusText;
+    }
+  }
+
+  private setSimulationActive(active: boolean) {
+    this.controls.setEnabled(!active);
+    
+    const eraButtons = document.querySelectorAll('.era-btn') as NodeListOf<HTMLButtonElement>;
+    eraButtons.forEach(btn => {
+      btn.disabled = active;
+      btn.style.opacity = active ? '0.6' : '1.0';
+      btn.style.pointerEvents = active ? 'none' : 'auto';
+    });
+
+    const btnClean = document.getElementById('btn-clear-soot') as HTMLButtonElement;
+    if (btnClean) {
+      btnClean.disabled = active;
+      btnClean.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const btnRepair = document.getElementById('btn-repair-barrel') as HTMLButtonElement;
+    if (btnRepair) {
+      btnRepair.disabled = active;
+      btnRepair.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const btnOpenLab = document.getElementById('btn-open-lab') as HTMLButtonElement;
+    if (btnOpenLab) {
+      btnOpenLab.disabled = active;
+      btnOpenLab.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const btnResetBatch = document.getElementById('btn-reset-batch') as HTMLButtonElement;
+    if (btnResetBatch) {
+      btnResetBatch.disabled = active;
+      btnResetBatch.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const viewButtons = ['btn-view-split', 'btn-view-cutaway', 'btn-view-trajectory'].map(id => document.getElementById(id) as HTMLButtonElement);
+    viewButtons.forEach(btn => {
+      if (btn) {
+        btn.disabled = active;
+        btn.style.opacity = active ? '0.6' : '1.0';
+      }
+    });
+  }
+
+  private startAnimationLoop() {
+    const loop = () => {
+      if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
+        const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
+        if (frame) {
+          const isPlayOrSetup = this.timeline.isPlaying || frame.stage === 'setup' || frame.stage === 'ignition';
+          if (isPlayOrSetup) {
+            this.renderer.drawFrame(
+              frame,
+              this.currentInputs,
+              !this.timeline.isPlaying,
+              this.shotHistory
+            );
+          }
+        }
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  private updateGlowingBorders(frame: ShotFrame) {
+    const cutawayCard = document.querySelector('.cutaway-card') as HTMLDivElement;
+    const trajectoryCard = document.querySelector('.trajectory-card') as HTMLDivElement;
+    if (!cutawayCard || !trajectoryCard) return;
+
+    cutawayCard.classList.remove('glow-setup', 'glow-pressure', 'glow-rupture');
+    trajectoryCard.classList.remove('glow-setup', 'glow-pressure', 'glow-rupture');
+
+    const stage = frame.stage;
+    const isRuptured = frame.warnings.some(w => w.toLowerCase().includes('failed') || w.toLowerCase().includes('rupture'));
+
+    if (isRuptured) {
+      cutawayCard.classList.add('glow-rupture');
+      trajectoryCard.classList.add('glow-rupture');
+    } else if (stage === 'setup' || stage === 'ignition') {
+      cutawayCard.classList.add('glow-setup');
+      trajectoryCard.classList.add('glow-setup');
+    } else if (stage === 'pressure' || stage === 'movement' || stage === 'flight') {
+      cutawayCard.classList.add('glow-pressure');
+      trajectoryCard.classList.add('glow-pressure');
+    }
   }
 }
 

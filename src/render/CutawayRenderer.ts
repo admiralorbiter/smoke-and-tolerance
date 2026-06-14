@@ -12,12 +12,17 @@ export class CutawayRenderer {
   private trajectoryCanvas: HTMLCanvasElement;
   private trajectoryCtx: CanvasRenderingContext2D;
   private sootLevel: number = 0; // accumulated fouling level
+  public xrayMode: boolean = false;
 
   constructor(cutawayCanvasId: string, trajectoryCanvasId: string) {
     this.cutawayCanvas = document.getElementById(cutawayCanvasId) as HTMLCanvasElement;
     this.cutawayCtx = this.cutawayCanvas.getContext('2d') as CanvasRenderingContext2D;
     this.trajectoryCanvas = document.getElementById(trajectoryCanvasId) as HTMLCanvasElement;
     this.trajectoryCtx = this.trajectoryCanvas.getContext('2d') as CanvasRenderingContext2D;
+  }
+
+  public setXrayMode(enabled: boolean) {
+    this.xrayMode = enabled;
   }
 
   public setSootLevel(level: number) {
@@ -78,8 +83,9 @@ export class CutawayRenderer {
     const barrelLeft = 60;
     const barrelLengthPx = 440;
     const barrelRight = barrelLeft + barrelLengthPx;
-    const centerY = 270;
-    const boreRadiusPx = 40; // radius of inside bore in pixels
+    const centerY = this.xrayMode ? 225 : 320;
+    const boreRadiusPx = this.xrayMode ? 55 : 40;
+    const wallThickness = this.xrayMode ? 26 : 20;
 
     const barrelMaterial = inputs.barrelMaterial;
     const projectileType = inputs.projectileType;
@@ -117,7 +123,7 @@ export class CutawayRenderer {
     
     // Draw barrel block based on material
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#3d3228';
+    let wallStroke = '#3d3228';
     
     // Determine metal color based on material
     let wallColor = '#2d241c'; // default iron
@@ -126,6 +132,12 @@ export class CutawayRenderer {
     } else if (barrelMaterial === 'cast_bronze') {
       wallColor = '#5c4832';
     }
+
+    if (this.xrayMode) {
+      wallColor = 'rgba(10, 24, 20, 0.85)';
+      wallStroke = 'rgba(64, 185, 145, 0.6)';
+    }
+    ctx.strokeStyle = wallStroke;
 
     // Evaluate failure states using physical limits
     const limits = BARREL_LIMITS[barrelMaterial] || BARREL_LIMITS.cast_bronze;
@@ -171,34 +183,34 @@ export class CutawayRenderer {
         ctx.fillStyle = wallColor;
         // Top wall split left
         ctx.save();
-        ctx.translate(barrelLeft, centerY - boreRadiusPx - 20);
+        ctx.translate(barrelLeft, centerY - boreRadiusPx - wallThickness);
         ctx.rotate(-0.08);
-        ctx.fillRect(0, -10, barrelLengthPx / 2, 20);
-        ctx.strokeRect(0, -10, barrelLengthPx / 2, 20);
+        ctx.fillRect(0, -wallThickness / 2, barrelLengthPx / 2, wallThickness);
+        ctx.strokeRect(0, -wallThickness / 2, barrelLengthPx / 2, wallThickness);
         ctx.restore();
 
         // Top wall split right
         ctx.save();
-        ctx.translate(barrelLeft + barrelLengthPx / 2, centerY - boreRadiusPx - 20);
+        ctx.translate(barrelLeft + barrelLengthPx / 2, centerY - boreRadiusPx - wallThickness);
         ctx.rotate(0.08);
-        ctx.fillRect(0, -10, barrelLengthPx / 2, 20);
-        ctx.strokeRect(0, -10, barrelLengthPx / 2, 20);
+        ctx.fillRect(0, -wallThickness / 2, barrelLengthPx / 2, wallThickness);
+        ctx.strokeRect(0, -wallThickness / 2, barrelLengthPx / 2, wallThickness);
         ctx.restore();
 
         // Bottom wall split left
         ctx.save();
         ctx.translate(barrelLeft, centerY + boreRadiusPx);
         ctx.rotate(0.08);
-        ctx.fillRect(0, 10, barrelLengthPx / 2, 20);
-        ctx.strokeRect(0, 10, barrelLengthPx / 2, 20);
+        ctx.fillRect(0, wallThickness / 2, barrelLengthPx / 2, wallThickness);
+        ctx.strokeRect(0, wallThickness / 2, barrelLengthPx / 2, wallThickness);
         ctx.restore();
 
         // Bottom wall split right
         ctx.save();
         ctx.translate(barrelLeft + barrelLengthPx / 2, centerY + boreRadiusPx);
         ctx.rotate(-0.08);
-        ctx.fillRect(0, 10, barrelLengthPx / 2, 20);
-        ctx.strokeRect(0, 10, barrelLengthPx / 2, 20);
+        ctx.fillRect(0, wallThickness / 2, barrelLengthPx / 2, wallThickness);
+        ctx.strokeRect(0, wallThickness / 2, barrelLengthPx / 2, wallThickness);
         ctx.restore();
         
         // Horizontal gas vents
@@ -211,16 +223,16 @@ export class CutawayRenderer {
       } else if (barrelMaterial === 'wrought_iron') {
         ctx.fillStyle = wallColor;
         // Split left half of walls
-        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - 20, 140, 20);
-        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - 20, 140, 20);
-        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, 140, 20);
-        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, 140, 20);
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, 140, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, 140, wallThickness);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, 140, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, 140, wallThickness);
 
         // Split right half of walls
-        ctx.fillRect(barrelLeft + 160, centerY - boreRadiusPx - 20, barrelLengthPx - 160, 20);
-        ctx.strokeRect(barrelLeft + 160, centerY - boreRadiusPx - 20, barrelLengthPx - 160, 20);
-        ctx.fillRect(barrelLeft + 160, centerY + boreRadiusPx, barrelLengthPx - 160, 20);
-        ctx.strokeRect(barrelLeft + 160, centerY + boreRadiusPx, barrelLengthPx - 160, 20);
+        ctx.fillRect(barrelLeft + 160, centerY - boreRadiusPx - wallThickness, barrelLengthPx - 160, wallThickness);
+        ctx.strokeRect(barrelLeft + 160, centerY - boreRadiusPx - wallThickness, barrelLengthPx - 160, wallThickness);
+        ctx.fillRect(barrelLeft + 160, centerY + boreRadiusPx, barrelLengthPx - 160, wallThickness);
+        ctx.strokeRect(barrelLeft + 160, centerY + boreRadiusPx, barrelLengthPx - 160, wallThickness);
 
         // Vertical seam separation flame jet
         let gradJet = ctx.createLinearGradient(0, centerY - 100, 0, centerY + 100);
@@ -235,15 +247,15 @@ export class CutawayRenderer {
         // cast_bronze - shattering shards
         ctx.fillStyle = wallColor;
         // Walls with gap
-        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - 20, 110, 20);
-        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - 20, 110, 20);
-        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, 110, 20);
-        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, 110, 20);
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, 110, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, 110, wallThickness);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, 110, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, 110, wallThickness);
 
-        ctx.fillRect(barrelLeft + 190, centerY - boreRadiusPx - 20, barrelLengthPx - 190, 20);
-        ctx.strokeRect(barrelLeft + 190, centerY - boreRadiusPx - 20, barrelLengthPx - 190, 20);
-        ctx.fillRect(barrelLeft + 190, centerY + boreRadiusPx, barrelLengthPx - 190, 20);
-        ctx.strokeRect(barrelLeft + 190, centerY + boreRadiusPx, barrelLengthPx - 190, 20);
+        ctx.fillRect(barrelLeft + 190, centerY - boreRadiusPx - wallThickness, barrelLengthPx - 190, wallThickness);
+        ctx.strokeRect(barrelLeft + 190, centerY - boreRadiusPx - wallThickness, barrelLengthPx - 190, wallThickness);
+        ctx.fillRect(barrelLeft + 190, centerY + boreRadiusPx, barrelLengthPx - 190, wallThickness);
+        ctx.strokeRect(barrelLeft + 190, centerY + boreRadiusPx, barrelLengthPx - 190, wallThickness);
 
         // Floating bronze shards
         ctx.fillStyle = wallColor;
@@ -282,27 +294,145 @@ export class CutawayRenderer {
       // Normal Walls
       // Top wall
       ctx.fillStyle = wallColor;
-      ctx.fillRect(barrelLeft, centerY - boreRadiusPx - 20, barrelLengthPx, 20);
+      ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
       if (redGlow > 0.01) {
         ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
-        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - 20, barrelLengthPx, 20);
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
       }
-      ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - 20, barrelLengthPx, 20);
+      ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
 
       // Bottom wall
       ctx.fillStyle = wallColor;
-      ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, 20);
+      ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
       if (redGlow > 0.01) {
         ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
-        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, 20);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
       }
-      ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, 20);
+      ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
+    }
+
+    // --- DRAW X-RAY METALLURGICAL CRACKS ---
+    if (this.xrayMode && !isRuptured && frame.barrelFatigue > 0) {
+      ctx.save();
+      
+      let seed = inputs.flawSeed || 12345;
+      const pseudoRandom = () => {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+      };
+
+      const getCrackColor = (fatigue: number) => {
+        const pulse = Math.sin(Date.now() * 0.005);
+        const r = Math.floor(220 + pulse * 35);
+        const g = Math.floor(80 + pulse * 20 * (1.0 - fatigue));
+        const b = 20;
+        const opacity = 0.5 + fatigue * 0.5;
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      };
+
+      const crackColor = getCrackColor(frame.barrelFatigue);
+      ctx.strokeStyle = crackColor;
+      ctx.lineWidth = 1.2 + frame.barrelFatigue * 2.0;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowBlur = 4 + frame.barrelFatigue * 6;
+      ctx.shadowColor = crackColor;
+
+      if (barrelMaterial === 'bamboo') {
+        // Horizontal/longitudinal split lines
+        const numSplits = Math.floor(frame.barrelFatigue * 8) + 2;
+        for (let i = 0; i < numSplits; i++) {
+          const isTop = pseudoRandom() > 0.5;
+          const x = barrelLeft + 20 + pseudoRandom() * (barrelLengthPx - 100);
+          const len = 30 + pseudoRandom() * 120 * frame.barrelFatigue;
+          const y = isTop 
+            ? centerY - boreRadiusPx - 20 + 3 + pseudoRandom() * 14
+            : centerY + boreRadiusPx + 3 + pseudoRandom() * 14;
+          
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + len, y);
+          ctx.stroke();
+        }
+      } else if (barrelMaterial === 'wrought_iron') {
+        // Weld seam separations
+        const numSeams = 4;
+        for (let i = 0; i < numSeams; i++) {
+          const isTop = i < 2;
+          const seamY = isTop
+            ? centerY - boreRadiusPx - 20 + (i + 1) * 7
+            : centerY + boreRadiusPx + (i - 1) * 7;
+          
+          const numSegments = Math.floor(frame.barrelFatigue * 4) + 1;
+          for (let s = 0; s < numSegments; s++) {
+            const x = barrelLeft + 15 + pseudoRandom() * (barrelLengthPx - 80);
+            const len = 20 + pseudoRandom() * 90 * frame.barrelFatigue;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, seamY);
+            let cx = x;
+            const steps = 4;
+            for (let st = 1; st <= steps; st++) {
+              cx += len / steps;
+              const cy = seamY + (pseudoRandom() - 0.5) * 3 * frame.barrelFatigue;
+              ctx.lineTo(cx, cy);
+            }
+            ctx.stroke();
+          }
+        }
+      } else if (barrelMaterial === 'cast_bronze') {
+        // Circular voids with random-walk branching crack paths
+        const voids = [
+          { x: barrelLeft + 150, y: centerY - boreRadiusPx - 10, r: 4.5 },
+          { x: barrelLeft + 300, y: centerY + boreRadiusPx + 10, r: 4.5 }
+        ];
+
+        voids.forEach(v => {
+          ctx.save();
+          ctx.fillStyle = '#0c0a09';
+          ctx.strokeStyle = crackColor;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, v.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+
+          const numBranches = Math.floor(frame.barrelFatigue * 3) + 1;
+          for (let b = 0; b < numBranches; b++) {
+            let cx = v.x;
+            let cy = v.y;
+            let angle = pseudoRandom() * Math.PI * 2;
+            const steps = Math.floor(frame.barrelFatigue * 14) + 4;
+            
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            for (let s = 0; s < steps; s++) {
+              angle += (pseudoRandom() - 0.5) * 1.5;
+              const stepLen = 4 + pseudoRandom() * 6;
+              cx += Math.cos(angle) * stepLen;
+              cy += Math.sin(angle) * stepLen;
+              
+              const wallMin = cy < centerY ? centerY - boreRadiusPx - 20 : centerY + boreRadiusPx;
+              const wallMax = cy < centerY ? centerY - boreRadiusPx : centerY + boreRadiusPx + 20;
+              if (cy < wallMin) cy = wallMin;
+              if (cy > wallMax) cy = wallMax;
+              if (cx < barrelLeft) cx = barrelLeft;
+              if (cx > barrelRight) cx = barrelRight;
+
+              ctx.lineTo(cx, cy);
+            }
+            ctx.stroke();
+          }
+        });
+      }
+      ctx.restore();
     }
 
     // Draw bronze casting bubble void defect in normal wall (stress concentrator)
     if (barrelMaterial === 'cast_bronze' && !isRuptured) {
       ctx.save();
-      ctx.strokeStyle = '#3d3228';
+      ctx.strokeStyle = wallStroke;
       ctx.fillStyle = '#0c0a09';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -320,7 +450,7 @@ export class CutawayRenderer {
     // Draw touch-hole channel
     ctx.fillStyle = '#0c0a09';
     ctx.fillRect(barrelLeft + 40, centerY - boreRadiusPx - 20, 8, 20);
-    ctx.strokeStyle = '#3d3228';
+    ctx.strokeStyle = wallStroke;
     ctx.strokeRect(barrelLeft + 40, centerY - boreRadiusPx - 20, 8, 20);
 
     // Draw Weather Protection cover over touch-hole Breech
@@ -345,7 +475,7 @@ export class CutawayRenderer {
       } else if (inputs.weatherProtection === 'pan_shield') {
         ctx.save();
         ctx.fillStyle = wallColor; // matches barrel color (bronze/iron)
-        ctx.strokeStyle = '#3d3228';
+        ctx.strokeStyle = wallStroke;
         ctx.lineWidth = 2;
         // Draw a metal shield cover pivoting above touchhole
         ctx.beginPath();
@@ -762,31 +892,33 @@ export class CutawayRenderer {
     }
 
     // --- DRAW CHEMISTRY & IGNITION ZOOM LENSES ---
-    if (frame.stage === 'ignition' || frame.stage === 'pressure') {
-      this.drawChemistryZoom(
-        ctx,
-        frame,
-        propellantType,
-        refinementLevel,
-        barrelLeft,
-        centerY,
-        boreRadiusPx
-      );
-    }
-    if (frame.stage === 'setup' || frame.stage === 'ignition') {
-      this.drawIgnitionZoom(
-        ctx,
-        frame,
-        inputs,
-        barrelLeft,
-        centerY,
-        boreRadiusPx
-      );
+    if (!this.xrayMode) {
+      if (frame.stage === 'ignition' || frame.stage === 'pressure') {
+        this.drawChemistryZoom(
+          ctx,
+          frame,
+          propellantType,
+          refinementLevel,
+          barrelLeft,
+          centerY,
+          boreRadiusPx
+        );
+      }
+      if (frame.stage === 'setup' || frame.stage === 'ignition') {
+        this.drawIgnitionZoom(
+          ctx,
+          frame,
+          inputs,
+          barrelLeft,
+          centerY,
+          boreRadiusPx
+        );
+      }
     }
 
     ctx.restore();
 
-    if (isPaused) {
+    if (isPaused && !this.xrayMode) {
       this.drawManuscriptCallouts(
         frame,
         projectileType,
@@ -796,8 +928,92 @@ export class CutawayRenderer {
         barrelLengthPx
       );
     }
+
+    // Premium Visual Polish: Muzzle Exit Lens Flare
+    if (frame.stage === 'flight' && frame.projectileX < 4.0) {
+      const exitProgress = (frame.projectileX - 1.0) / 3.0; // 0.0 at exit, increases as it flies
+      const flareOpacity = Math.max(0.0, 1.0 - exitProgress);
+      if (flareOpacity > 0.01) {
+        const flareR = 60 * flareOpacity;
+        const grad = ctx.createRadialGradient(
+          barrelRight, centerY, 2,
+          barrelRight, centerY, flareR
+        );
+        grad.addColorStop(0, `rgba(255, 255, 255, ${flareOpacity * 0.95})`);
+        grad.addColorStop(0.2, `rgba(255, 183, 3, ${flareOpacity * 0.8})`);
+        grad.addColorStop(0.5, `rgba(217, 78, 52, ${flareOpacity * 0.5})`);
+        grad.addColorStop(1.0, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(barrelRight, centerY, flareR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Add visual shockwave ring
+        ctx.strokeStyle = `rgba(255, 200, 150, ${flareOpacity * 0.3})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(barrelRight, centerY, flareR * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Premium Visual Polish: Dynamic Idle Sparkles
+    if (frame.stage === 'setup' || frame.stage === 'ignition') {
+      const touchX = barrelLeft + 44;
+      const touchY = centerY - boreRadiusPx - wallThickness;
+      const t = performance.now() * 0.001; // elapsed seconds
+      for (let i = 0; i < 5; i++) {
+        const particleId = i * 2.3;
+        const life = (t * 0.5 + particleId) % 1.0;
+        const opacity = 1.0 - life;
+        const px = touchX + 4 + Math.sin(t * 5 + particleId) * 6;
+        const py = touchY - life * 25 - 2;
+        const size = (1.5 - life * 0.8);
+        ctx.fillStyle = `rgba(255, 159, 28, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(px, py, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     
     this.cutawayCtx.restore(); // camera shake restore
+
+    // Draw copper-rimmed lens overlay if in xrayMode
+    if (this.xrayMode) {
+      const ctx = this.cutawayCtx;
+      const w = this.cutawayCanvas.width;
+      const h = this.cutawayCanvas.height;
+      ctx.save();
+      
+      // Radial lens vignette using copper/rust colors
+      const grad = ctx.createRadialGradient(w / 2, h / 2, w / 4, w / 2, h / 2, w / 2);
+      grad.addColorStop(0, 'rgba(200, 125, 85, 0.0)');
+      grad.addColorStop(0.7, 'rgba(120, 65, 35, 0.12)');
+      grad.addColorStop(1.0, 'rgba(40, 20, 10, 0.45)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      
+      // Copper bezel / frame around the edges of the canvas
+      ctx.strokeStyle = '#a66846'; // copper metal
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, w - 8, h - 8);
+      
+      // Subtle inner gold/copper highlight
+      ctx.strokeStyle = 'rgba(230, 170, 110, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(7, 7, w - 14, h - 14);
+
+      // Tech details text in corners
+      ctx.fillStyle = '#bfa085';
+      ctx.font = 'normal 9px Share Tech Mono, monospace';
+      ctx.fillText('🔍 METALLURGICAL LENS ACTIVE', 15, 20);
+      
+      const fatiguePct = (frame.barrelFatigue * 100).toFixed(1);
+      ctx.fillStyle = frame.barrelFatigue > 0.8 ? '#ff3c00' : frame.barrelFatigue > 0.4 ? '#ff9f1c' : '#bca085';
+      ctx.fillText(`DEGRADATION: ${fatiguePct}%`, w - 130, 20);
+
+      ctx.restore();
+    }
   }
 
   private drawChemistryZoom(
@@ -812,9 +1028,9 @@ export class CutawayRenderer {
     ctx.save();
     
     // Zoom lens coordinates (scaled up)
-    const zoomX = 365;
-    const zoomY = 100;
-    const zoomR = 55;
+    const zoomX = 520;
+    const zoomY = 110;
+    const zoomR = 60;
     const targetX = barrelLeft + 60; // chamber center
     const targetY = centerY;
 
@@ -913,6 +1129,7 @@ export class CutawayRenderer {
     ctx.restore();
 
     // 4. Draw Chemistry Callout text (Right of Zoom Circle)
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#bca085';
     ctx.font = 'italic 13px Lora, serif';
     ctx.fillText('fig 1b. Alchemical Calcination', zoomX + zoomR + 15, zoomY - 24);
@@ -947,9 +1164,9 @@ export class CutawayRenderer {
     ctx.save();
     
     // Zoom lens coordinates (scaled up and shifted for spacing)
-    const zoomX = 175;
-    const zoomY = 100;
-    const zoomR = 55;
+    const zoomX = 200;
+    const zoomY = 110;
+    const zoomR = 60;
     
     const touchholeX = barrelLeft + 44;
     const touchholeY = centerY - boreRadiusPx - 20;
@@ -1060,6 +1277,7 @@ export class CutawayRenderer {
     ctx.restore(); // restore clip
 
     // 5. Draw callout labels to the left of the zoom lens (ensuring positive bounds)
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#bca085';
     ctx.font = 'italic 13px Lora, serif';
     ctx.fillText('fig 1a. Touch-hole Priming', 15, zoomY - 24);
@@ -1079,6 +1297,23 @@ export class CutawayRenderer {
     ctx.restore();
   }
 
+  public getTooltipAt(x: number, y: number): string | null {
+    if (this.xrayMode) {
+      return null;
+    }
+    // Check Chemistry Lens
+    const distChem = Math.sqrt((x - 520) ** 2 + (y - 110) ** 2);
+    if (distChem <= 60) {
+      return "fig 1b. Alchemical Calcination: Shows active combustion temperature and stoichiometry gas yields.";
+    }
+    // Check Ignition Lens
+    const distIgn = Math.sqrt((x - 200) ** 2 + (y - 110) ** 2);
+    if (distIgn <= 60) {
+      return "fig 1a. Touch-hole Priming: Displays match-lock ignition delay, powder state, and humidity dwell penalties.";
+    }
+    return null;
+  }
+
   private drawManuscriptCallouts(
     frame: ShotFrame,
     projectileType: string,
@@ -1088,6 +1323,7 @@ export class CutawayRenderer {
     barrelLengthPx: number
   ) {
     const ctx = this.cutawayCtx;
+    const wallThickness = this.xrayMode ? 26 : 20;
     ctx.save();
     ctx.strokeStyle = '#8c7662';
     ctx.fillStyle = '#bca085';
@@ -1161,23 +1397,23 @@ export class CutawayRenderer {
       }
     }
 
-    // 3. Convective Wall Loss Callout (pointing to bottom wall)
+    // 3. Convective Wall Loss Callout (pointing to top wall)
     const lossTx = barrelLeft + 220;
-    const lossTy = centerY + boreRadiusPx + 10;
+    const lossTy = centerY - boreRadiusPx - wallThickness;
     const lossIx = barrelLeft + 250;
-    const lossIy = centerY + boreRadiusPx + 45;
-    drawLeader(lossTx, lossTy, lossIx, lossIy, 55);
-    ctx.fillText(`fig 1f. Convective Wall Loss: ${frame.wallHeatLoss.toFixed(0)} J`, lossIx + 5, lossIy - 4);
+    const lossIy = centerY - boreRadiusPx - wallThickness - 30;
+    drawLeader(lossTx, lossTy, lossIx, lossIy, 40);
+    ctx.fillText(`fig 1f. Convective Wall Loss: ${frame.wallHeatLoss.toFixed(0)} J`, lossIx + 45, lossIy - 4);
 
-    // 4. Carbonaceous Crust Callout (pointing to bottom soot layer)
-    const sootTx = barrelLeft + 180;
-    const sootTy = centerY + boreRadiusPx - 2;
-    const sootIx = barrelLeft + 150;
-    const sootIy = centerY + boreRadiusPx + 65;
-    drawLeader(sootTx, sootTy, sootIx, sootIy, -50);
+    // 4. Carbonaceous Crust Callout (pointing to top soot layer)
+    const sootTx = barrelLeft + 150;
+    const sootTy = centerY - boreRadiusPx + 2;
+    const sootIx = barrelLeft + 120;
+    const sootIy = centerY - boreRadiusPx - wallThickness - 30;
+    drawLeader(sootTx, sootTy, sootIx, sootIy, -40);
     ctx.save();
     ctx.textAlign = 'right';
-    ctx.fillText(`fig 1g. Carbon Crust: ${(frame.foulingIndex * 100).toFixed(0)}% Fouled`, sootIx - 5, sootIy - 4);
+    ctx.fillText(`fig 1g. Carbon Crust: ${(frame.foulingIndex * 100).toFixed(0)}% Fouled`, sootIx - 45, sootIy - 4);
     ctx.restore();
 
     // 5. Fuel Consumption Callout (pointing to powder charge)
@@ -1185,11 +1421,11 @@ export class CutawayRenderer {
       const fuelTx = barrelLeft + 25;
       const fuelTy = centerY + 10;
       const fuelIx = barrelLeft - 10;
-      const fuelIy = centerY + 55;
-      drawLeader(fuelTx, fuelTy, fuelIx, fuelIy, -50);
+      const fuelIy = centerY + boreRadiusPx + 40;
+      drawLeader(fuelTx, fuelTy, fuelIx, fuelIy, -35);
       ctx.save();
       ctx.textAlign = 'right';
-      ctx.fillText(`fig 1h. Unspent Fuel: ${(frame.unburnedMass * 1000).toFixed(2)}g`, Math.max(10, fuelIx - 50), fuelIy - 4);
+      ctx.fillText(`fig 1h. Unspent Fuel: ${(frame.unburnedMass * 1000).toFixed(2)}g`, Math.max(10, fuelIx - 35), fuelIy - 4);
       ctx.restore();
     }
 
@@ -1297,8 +1533,8 @@ export class CutawayRenderer {
     const ctx = this.trajectoryCtx;
     const rangeLeft = 40;
     const rangeWidth = 520;
-    const groundY = 250;
-    const shooterHeightY = 202; // aligned with 1.2m launch height
+    const groundY = 360;
+    const shooterHeightY = groundY - 48; // aligned with 1.2m launch height
 
     // Draw Weather Overlays on Range (behind the target and curves)
     if (inputs) {
@@ -1309,12 +1545,12 @@ export class CutawayRenderer {
       // 1. Fog / Mist (Humidity)
       if (humidity > 50) {
         ctx.save();
-        const mistGrad = ctx.createLinearGradient(0, groundY - 120, 0, groundY);
+        const mistGrad = ctx.createLinearGradient(0, groundY - 280, 0, groundY);
         const opacity = Math.min(0.35, (humidity - 50) / 100);
         mistGrad.addColorStop(0, `rgba(100, 100, 100, 0.0)`);
         mistGrad.addColorStop(1, `rgba(120, 120, 120, ${opacity})`);
         ctx.fillStyle = mistGrad;
-        ctx.fillRect(rangeLeft, groundY - 120, rangeWidth, 120);
+        ctx.fillRect(rangeLeft, groundY - 280, rangeWidth, 280);
         ctx.restore();
       }
 
@@ -1326,7 +1562,7 @@ export class CutawayRenderer {
         ctx.setLineDash([30, 90]);
         const scrollOffset = (frame.timeMs * 2.0) % 200;
         ctx.beginPath();
-        for (let y = groundY - 100; y < groundY; y += 35) {
+        for (let y = groundY - 260; y < groundY; y += 45) {
           ctx.moveTo(rangeLeft - scrollOffset, y);
           ctx.bezierCurveTo(
             rangeLeft + rangeWidth/3 - scrollOffset, y - 8,
@@ -1348,7 +1584,7 @@ export class CutawayRenderer {
         ctx.beginPath();
         for (let x = rangeLeft - 50; x < rangeLeft + rangeWidth + 50; x += 18) {
           const yOffset = (tSeed * 12) % 40;
-          for (let y = groundY - 120 + yOffset; y < groundY; y += 40) {
+          for (let y = groundY - 280 + yOffset; y < groundY; y += 40) {
             const dx = Math.tan(rainAngle * Math.PI / 180) * 25;
             ctx.moveTo(x + dx, y);
             ctx.lineTo(x, y + 25);

@@ -23,6 +23,8 @@ export interface ShotInput {
   propellantProfile: string;
   customMixActive?: boolean;
   alchemicalMix?: AlchemicalMix;
+  persistentFatigue: number;
+  flawSeed: number;
 }
 
 export const FRAME_STRIDE = 20;
@@ -48,6 +50,7 @@ export interface ShotFrame {
   wallHeatLoss: number;
   foulingIndex: number;
   burnProfileCode: number;
+  barrelFatigue: number;
 }
 
 export interface DiagnosisEntry {
@@ -145,6 +148,7 @@ export function parseFramesFromBuffer(
       wallHeatLoss: buffer[startIdx + 16],
       foulingIndex: buffer[startIdx + 17],
       burnProfileCode: buffer[startIdx + 18],
+      barrelFatigue: buffer[startIdx + 19],
     });
   }
 

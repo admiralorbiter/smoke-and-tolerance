@@ -177,7 +177,7 @@ export class AudioManager {
     // B. Muzzle Exit Blast & Resonance
     if (stage === 'muzzle_exit') {
       this.playBlast(frame.pressure);
-      this.playResonance(inputs.barrelMaterial, frame.pressure);
+      this.playResonance(inputs.barrelMaterial, frame.pressure, frame.barrelFatigue);
       return;
     }
 
@@ -362,16 +362,21 @@ export class AudioManager {
     crack.stop(time + 0.1);
   }
 
-  private playResonance(material: string, pressure: number) {
+  private playResonance(material: string, pressure: number, fatigue: number) {
     if (!this.ctx) return;
     const time = this.ctx.currentTime;
     const scale = Math.min(1.0, pressure / 20.0);
 
     if (material === 'cast_bronze') {
-      // Bronzes bells: rich harmonic ringing
-      const partials = [380, 570, 850, 1280];
+      // Bronzes bells: rich harmonic ringing, detuned and damped as fatigue increases
+      const partials = [
+        380 * (1.0 - 0.15 * fatigue),
+        570 * (1.0 - 0.18 * fatigue),
+        850 * (1.0 - 0.22 * fatigue),
+        1280 * (1.0 - 0.25 * fatigue)
+      ];
       const gains = [0.12, 0.08, 0.05, 0.03];
-      const decays = [1.8, 1.2, 0.7, 0.4];
+      const decays = [1.8, 1.2, 0.7, 0.4].map(d => d * Math.exp(-2.5 * fatigue));
 
       partials.forEach((freq, idx) => {
         const osc = this.ctx!.createOscillator();
@@ -389,7 +394,7 @@ export class AudioManager {
         osc.stop(time + decays[idx] + 0.1);
       });
     } else if (material === 'wrought_iron') {
-      // Wrought Iron: Flat, dense metallic clank
+      // Wrought Iron: Flat, dense metallic clank, modulated with 120Hz buzzy triangle under fatigue
       const clank = this.ctx.createOscillator();
       clank.type = 'triangle';
       clank.frequency.setValueAtTime(180, time);
@@ -400,10 +405,25 @@ export class AudioManager {
 
       clank.connect(clankGain);
       clankGain.connect(this.ctx.destination);
+
+      if (fatigue > 0.05) {
+        const mod = this.ctx.createOscillator();
+        mod.type = 'triangle';
+        mod.frequency.setValueAtTime(120, time);
+
+        const modGain = this.ctx.createGain();
+        modGain.gain.setValueAtTime(0.15 * scale * fatigue, time);
+
+        mod.connect(modGain);
+        modGain.connect(clankGain.gain);
+        mod.start();
+        mod.stop(time + 0.25);
+      }
+
       clank.start();
       clank.stop(time + 0.3);
     } else {
-      // Bamboo: Sharp wood-fiber cracking thuds
+      // Bamboo: Sharp wood-fiber cracking thuds, with snap crackles under fatigue
       const woodSnap = this.ctx.createOscillator();
       woodSnap.type = 'sine';
       woodSnap.frequency.setValueAtTime(260, time);
@@ -416,6 +436,25 @@ export class AudioManager {
       gain.connect(this.ctx.destination);
       woodSnap.start();
       woodSnap.stop(time + 0.12);
+
+      if (fatigue > 0.05) {
+        const numCrackles = Math.floor(fatigue * 5) + 1;
+        for (let i = 0; i < numCrackles; i++) {
+          const crackleTime = time + 0.01 + Math.random() * 0.08;
+          const osc = this.ctx.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(800 + Math.random() * 600, crackleTime);
+
+          const cGain = this.ctx.createGain();
+          cGain.gain.setValueAtTime(0.08 * fatigue, crackleTime);
+          cGain.gain.exponentialRampToValueAtTime(0.0001, crackleTime + 0.02);
+
+          osc.connect(cGain);
+          cGain.connect(this.ctx.destination);
+          osc.start(crackleTime);
+          osc.stop(crackleTime + 0.03);
+        }
+      }
     }
   }
 

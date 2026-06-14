@@ -9,9 +9,9 @@ pub struct BarrelProperties {
 }
 
 impl BarrelProperties {
-    pub fn get_by_name(name: &str, seed: u64) -> Self {
-        // Deterministic flaw factor from seed
-        let flaw_rand = ((seed % 100) as f64) / 100.0; // 0.0 to 1.0
+    pub fn get_by_name(name: &str, flaw_seed: u64) -> Self {
+        // Deterministic flaw factor from flaw_seed
+        let flaw_rand = ((flaw_seed % 100) as f64) / 100.0; // 0.0 to 1.0
 
         match name {
             "bamboo" => Self {
@@ -46,7 +46,7 @@ impl BarrelProperties {
 
     /// Calculate the von Mises stress at the inner wall using closed-cylinder equations for thick-walled cylinders.
     /// Returns stress in MPa.
-    pub fn calculate_von_mises_stress(&self, pressure_mpa: f64) -> f64 {
+    pub fn calculate_von_mises_stress(&self, pressure_mpa: f64, fatigue: f64) -> f64 {
         if pressure_mpa <= 0.0 {
             return 0.0;
         }
@@ -54,7 +54,10 @@ impl BarrelProperties {
         let ro_sq = self.r_outer * self.r_outer;
         
         let nominal_stress = pressure_mpa * (3.0_f64.sqrt() * ro_sq) / (ro_sq - ri_sq);
-        nominal_stress * self.flaw_factor
+        
+        // Crack propagation scales the active flaw factor
+        let active_flaw_factor = self.flaw_factor * (1.0 + 0.6 * fatigue);
+        nominal_stress * active_flaw_factor
     }
 
     /// Evaluates if the barrel fails under the given stress (in MPa).

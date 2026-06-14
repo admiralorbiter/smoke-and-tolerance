@@ -67,6 +67,8 @@ export class ControlsPanel {
       seed: BigInt(Math.floor(Math.random() * 1000000)) as any,
       persistentFouling: 0.0,
       propellantProfile: this.selectPropellant.value,
+      persistentFatigue: 0.0,
+      flawSeed: 0,
     };
   }
 
@@ -74,6 +76,24 @@ export class ControlsPanel {
     this.btnFire.disabled = firing;
     this.btnFire.style.opacity = firing ? '0.6' : '1';
     this.btnFire.textContent = firing ? 'SIMULATING...' : '🔥 FIRE TEST SHOT';
+  }
+
+  public setEnabled(enabled: boolean) {
+    this.selectBarrel.disabled = !enabled;
+    if (!this.isCustomMixActive) {
+      this.selectPropellant.disabled = !enabled;
+      this.sliderRefinement.disabled = !enabled;
+    }
+    this.selectProjectile.disabled = !enabled;
+    this.selectSealing.disabled = !enabled;
+    this.btnFire.disabled = !enabled;
+    if (!enabled) {
+      this.sliderHumidity.disabled = true;
+      this.sliderWind.disabled = true;
+      this.sliderRain.disabled = true;
+    } else {
+      this.updateWeatherLocks();
+    }
   }
 
   public applyEraRestrictions(config: any) {

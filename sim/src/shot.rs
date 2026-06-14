@@ -8,7 +8,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     // Initialize deterministic random number generator from seed
     let mut rng = ChaCha8Rng::seed_from_u64(input.seed);
 
-    let barrel = BarrelProperties::get_by_name(&input.barrel_material, input.seed);
+    let barrel = BarrelProperties::get_by_name(&input.barrel_material, input.flaw_seed);
 
     let mut frames = Vec::new();
     let mut outcomes = Vec::new();
@@ -278,6 +278,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 wall_heat_loss: 0.0,
                 fouling_index: input.persistent_fouling,
                 burn_profile_code,
+                barrel_fatigue: input.persistent_fatigue,
             });
         }
 
@@ -337,6 +338,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 wall_heat_loss: 0.0,
                 fouling_index: input.persistent_fouling,
                 burn_profile_code,
+                barrel_fatigue: input.persistent_fatigue,
             });
             current_temp = temp_now;
             chamber_energy = gas_mass * cv * current_temp;
@@ -422,8 +424,20 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             let choked_factor = choked_constant / rt_sqrt;
             let pressure_pa = pressure * 1_000_000.0;
 
-            let windage_leak = if gap_area > 0.0 && pressure > 0.1 {
-                c_leak * gap_area * pressure_pa * choked_factor * (dt / 1000.0)
+            let mut active_gap_area = gap_area;
+            if input.persistent_fatigue > 0.4 {
+                // Fissures bleed additional chamber pressure (adds to gap area)
+                let gap_mult = 1.0 + 1.5 * input.persistent_fatigue;
+                active_gap_area = if gap_area > 0.0 {
+                    gap_area * gap_mult
+                } else {
+                    // even if perfect seal, fissure leaks gas
+                    std::f64::consts::PI * (bore_radius * bore_radius - (bore_radius - 0.0003).powi(2)) * (gap_mult - 1.0)
+                };
+            }
+
+            let windage_leak = if active_gap_area > 0.0 && pressure > 0.1 {
+                c_leak * active_gap_area * pressure_pa * choked_factor * (dt / 1000.0)
             } else {
                 0.0
             };
@@ -505,7 +519,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             }
 
             // Hoop stress
-            let hoop_stress = barrel.calculate_von_mises_stress(pressure);
+            let hoop_stress = barrel.calculate_von_mises_stress(pressure, input.persistent_fatigue);
             peak_stress = peak_stress.max(hoop_stress);
 
             let (ruptured, deformed) = barrel.evaluate_failure(hoop_stress);
@@ -548,12 +562,50 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 wall_heat_loss: accumulated_heat_loss,
                 fouling_index: fouling_index_now,
                 burn_profile_code,
+                barrel_fatigue: input.persistent_fatigue,
             });
 
             if is_ruptured {
                 break;
             }
         }
+    }
+
+    // Calculate fatigue once per shot
+    let mut delta_fatigue = 0.0;
+    if peak_stress > 0.1 * barrel.yield_strength {
+        if peak_stress <= barrel.yield_strength {
+            // Elastic fatigue
+            delta_fatigue = 0.005;
+        } else {
+            // Plastic fatigue
+            let c_plastic = match input.barrel_material.as_str() {
+                "bamboo" => 0.25,
+                "wrought_iron" => 0.15,
+                "cast_bronze" | _ => 0.10,
+            };
+            let stress_ratio = (peak_stress - barrel.yield_strength) / (barrel.ultimate_strength - barrel.yield_strength).max(1.0);
+            delta_fatigue = 0.005 + c_plastic * stress_ratio * stress_ratio;
+        }
+    }
+
+    // Chemical corrosion fatigue
+    let sulfur_factor = if custom_mix_active { 1.0 + sulfur_ratio } else { 1.10 };
+    let humidity_factor = 1.0 + (input.weather_humidity / 100.0) * 0.5;
+    let delta_corrosion = 0.02 * (total_soot_fouling / 0.015).min(1.0) * sulfur_factor * humidity_factor;
+
+    let mut final_fatigue = (input.persistent_fatigue + delta_fatigue + delta_corrosion).min(1.0);
+
+    if final_fatigue >= 1.0 && !is_ruptured {
+        is_ruptured = true;
+        if !outcomes.contains(&"barrel_failure".to_string()) {
+            outcomes.push("barrel_failure".to_string());
+        }
+    }
+
+    // Map the final fatigue to all frames currently in the vector
+    for frame in &mut frames {
+        frame.barrel_fatigue = final_fatigue;
     }
 
     let fouling_index_now = (input.persistent_fouling + (total_soot_fouling / 0.015)).min(1.0);
@@ -583,6 +635,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 wall_heat_loss: accumulated_heat_loss,
                 fouling_index: fouling_index_now,
                 burn_profile_code,
+                barrel_fatigue: final_fatigue,
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
@@ -614,6 +667,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 wall_heat_loss: accumulated_heat_loss,
                 fouling_index: fouling_index_now,
                 burn_profile_code,
+                barrel_fatigue: final_fatigue,
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
@@ -622,6 +676,10 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     // Stage 3: Flight trajectory
     stage = "flight".to_string();
     let mut base_jitter = (wind_disturbance * 2.8) + (1.0 - shape_regularity) * 4.2;
+    if input.persistent_fatigue > 0.0 {
+        // Deformed/fatigued barrel scales aim jitter due to out-of-round bore
+        base_jitter *= 1.0 + 2.0 * input.persistent_fatigue;
+    }
     let mut fixed_bias = 0.0;
 
     match weather_protection.as_str() {
@@ -700,6 +758,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             wall_heat_loss: accumulated_heat_loss,
             fouling_index: fouling_index_now,
             burn_profile_code,
+            barrel_fatigue: final_fatigue,
         });
     }
 
@@ -724,7 +783,8 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     let frame_count = frames.len();
     for i in 0..frame_count {
-        frames[i].t = i as f64 / (frame_count - 1) as f64;
+        frames[i].t = i as f64 / (frame_count - 1).max(1) as f64;
+        frames[i].barrel_fatigue = final_fatigue;
     }
 
     diagnosis::generate_result(input, frames, outcomes)

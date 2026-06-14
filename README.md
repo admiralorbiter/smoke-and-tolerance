@@ -10,6 +10,8 @@
 
 Rather than treating early firearms as finished weapons, this game explores them as unstable systems made from imperfect materials and limited by manufacturing tolerances:
 *   **Imperfect Metallurgy:** Explore how bamboo splits, welded wrought iron staves leak along welds, and bronze castings trap air bubbles.
+*   **Cumulative Fatigue & Maintenance:** Track persistent elastic wear, plastic deformation, and moisture/acidic soot corrosion. Clean the bore and restore the structural integrity of your barrel in the workshop to avoid catastrophic ruptures.
+*   **Interactive X-Ray Mode:** Toggle the alchemical lens overlay to inspect microscopic structural fissures, seams, and casting defects in real-time under stress.
 *   **Variable Chemistry:** Contrast raw, slow-burning meal powder against granulated corned powder.
 *   **Windage Clearance:** Observe how gas escapes around rough, hand-carved stone projectiles.
 *   **Environmental Sensitivity:** Experience how wind, rain, and humidity delay ignition and foul the barrel.
@@ -23,10 +25,11 @@ Rather than treating early firearms as finished weapons, this game explores them
 1.  **Select an Era:** Navigate the timeline bar at the top of the interface to choose a historical era from the 800s to the 1300s. Open the **Codex** tab to read the historical challenges, alchemical constraints, and progression milestones.
 2.  **Configure the Lab:** Experiment with metallurgical barrel types, waddings, projectile types, and propellant profiles (restricted to historically authentic selections based on the active era).
 3.  **Fire a Test Shot:** Run the physics-integrated Rust simulator.
-4.  **Inspect the Cutaway:** Watch the 2D cutaway animation showing pressure glows, stress coloration, and gas leakage streams (or open-air combustion packet venting).
+4.  **Inspect the Cutaway:** Watch the 2D cutaway animation showing pressure glows, stress coloration, and gas leakage streams (or enable X-Ray view to analyze internal micro-fissures and cracks).
 5.  **Scrub the Timeline:** Step frame-by-frame through ignition, pressure buildup, projectile movement, muzzle flash, and flight ballistics.
 6.  **Examine the Alchemical Ledger:** Toggle between **Instruments** (a Tria Prima ternary marker, Roman caloric pyrometer, and distillation alembic), **Ledger** (a conservation-of-mass balance table), and **Telemetry Charts** (interactive pressure, temperature, and mass plots synced with the timeline scrub).
 7.  **Read the Diagnosis:** Learn from post-shot analysis cards describing the historical causes of misfires, jams, and ruptures.
+8.  **Maintain the Barrel:** Clear soot residue via the clean bore tool to halt corrosion, and forge, re-cast, or splice the barrel in the workshop to repair persistent fatigue.
 
 ---
 
