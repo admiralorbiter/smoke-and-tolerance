@@ -233,6 +233,43 @@ pub fn generate_result(
         });
     }
 
+    if outcomes.contains(&"cook_off_thermal".to_string()) {
+        diagnosis.push(DiagnosisEntry {
+            severity: "critical".to_string(),
+            title: "Thermal Cook-off".to_string(),
+            explanation: format!(
+                "The barrel was extremely hot ({:.1} K / {:.1}°C). The heat conducted instantly into the gunpowder charge upon loading, triggering an uncontrolled ignition before you could aim.",
+                input.persistent_temperature.unwrap_or(293.15),
+                input.persistent_temperature.unwrap_or(293.15) - 293.15
+            ),
+        });
+    } else if outcomes.contains(&"cook_off_ember".to_string()) {
+        diagnosis.push(DiagnosisEntry {
+            severity: "critical".to_string(),
+            title: "Soot Ember Auto-Ignition".to_string(),
+            explanation: "Smoldering soot carbon residues from previous shots were left in the barrel because you did not swab the bore. These glowing embers ignited the powder charge instantly upon loading.".to_string(),
+        });
+    }
+
+    if input.touchhole_erosion.unwrap_or(0.0) > 0.5 {
+        diagnosis.push(DiagnosisEntry {
+            severity: "warning".to_string(),
+            title: "Touch-hole Vent Erosion".to_string(),
+            explanation: format!(
+                "The touch-hole has eroded by {:.1}% from high-pressure hot gases and sulfur corrosion. This wide vent leaks significant chamber pressure backward, reducing muzzle velocity. Bush the touch-hole in the workshop to repair it.",
+                input.touchhole_erosion.unwrap_or(0.0) * 100.0
+            ),
+        });
+    }
+
+    if input.persistent_temperature.unwrap_or(293.15) > 400.0 {
+        diagnosis.push(DiagnosisEntry {
+            severity: "info".to_string(),
+            title: "Thermal Bore Expansion".to_string(),
+            explanation: "Under high barrel heat, the metal bore expanded. This widened the windage clearance gap, allowing more combustion gas to leak past the projectile and reducing muzzle velocity.".to_string(),
+        });
+    }
+
     // Alchemical Stoichiometry Ledger Checks
     let custom_mix_active = input.custom_mix_active.unwrap_or(false);
     let saltpeter_ratio = input.saltpeter_ratio.unwrap_or(75.0) / 100.0;

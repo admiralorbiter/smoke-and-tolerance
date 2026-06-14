@@ -170,12 +170,32 @@ Persistent fatigue damage ($D_f$, from $0.0$ to $1.0$) accumulates over successi
 *   **Pressure Leakage:** When fatigue is critical ($D_f > 0.4$), cracks leak gas, scaling windage:
     $$M_{gap} = 1.0 + 1.5 \cdot D_f$$
 
+### 9. Thermodynamic Fatigue, Thermal Expansion & Cook-offs
+- **Convective Heat Transfer ($Q_{lost}$):**
+  $$Q_{lost} = h_{material} \cdot A_{bore} \cdot \left(T_{gas} - T_{barrel}\right) \cdot \Delta t$$
+  Where $h_{material}$ is the convective transfer coefficient (Bronze: 15,000, Wrought Iron: 8,000, Bamboo: 1,200), and $A_{bore}$ is the inner surface area of the pressurized bore.
+- **Dynamic Barrel Wall Heating ($T_{barrel}$):**
+  $$\Delta T_{barrel} = 120.0 \cdot \frac{Q_{lost}}{M_{barrel} \cdot C_{metal}}$$
+  Where $M_{barrel}$ is the barrel mass (Bronze: 2.4kg, Wrought Iron: 1.8kg, Bamboo: 0.3kg) and $C_{metal}$ is the specific heat capacity (Bronze: 380, Wrought Iron: 450, Bamboo: 1200 J/kg·K). (Scaled by $120.0$ for interactive gameplay responsiveness).
+- **Thermal Bore Expansion ($r_{bore}$):**
+  $$r_{bore} = r_{bore,nominal} \cdot \left(1.0 + \alpha_{metal} \cdot \left(T_{barrel} - 293.15\right)\right)$$
+  Where $\alpha_{metal}$ is the thermal expansion coefficient (Bronze: $18\times 10^{-6}$, Wrought Iron: $12\times 10^{-6}$, Bamboo: $5\times 10^{-6}$ / K). $r_{bore}$ is clamped to a maximum of $1.05 \cdot r_{bore,nominal}$ to prevent mathematical divergences.
+- **Thermal Cook-off Check:**
+  If the persistent barrel temperature exceeds $540\text{ K}$ ($267^\circ\text{C}$), loading propellant triggers an immediate uncontrolled matchless ignition (cook-off).
+- **Dirty Ember Cook-off Check:**
+  If the persistent fouling index $F_{fouling} > 0.60$, random smoldering embers can spark a cook-off during powder load.
+
+### 10. Pressure-driven Touch-hole Vent Erosion
+The touch-hole vent radius $r_{vent}$ erodes dynamically under high pressure combustion gas flow:
+$$r_{vent} = r_{vent,initial} + E_{rate} \cdot \int P_{chamber} \, dt$$
+Where $E_{rate}$ is the erosion factor, which grows touch-hole area and increases aim sway due to backward gas pressure blowback.
+
 ---
 
 
 ## 🜔 WASM Shared Memory Layout
 
-To achieve zero-copy transfer speeds, the simulation results are packed into a flat `Float64Array` shared buffer. Each frame uses a stride of exactly **`STRIDE_COUNT = 20`** floats (160 bytes per frame).
+To achieve zero-copy transfer speeds, the simulation results are packed into a flat `Float64Array` shared buffer. Each frame uses a stride of exactly **`STRIDE_COUNT = 23`** floats (184 bytes per frame).
 
 The layout of the elements within the stride is:
 
@@ -201,6 +221,9 @@ The layout of the elements within the stride is:
 | `17` | `fouling_index` | `f64` | Persistent fouling index (0-1) |
 | `18` | `burn_profile_code` | `f64` | Burn profile ID code |
 | `19` | `barrel_fatigue` | `f64` | Cumulative barrel fatigue index (0.0 to 1.0) |
+| `20` | `barrel_temperature` | `f64` | Persistent barrel temperature (K) |
+| `21` | `structural_strength_pct` | `f64` | Structural strength yield percentage (0.0 to 1.0) |
+| `22` | `touchhole_radius_current` | `f64` | Current touch-hole vent radius (m) |
 
 
 ---

@@ -64,8 +64,14 @@
         <div class="canvas-card cutaway-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <h2 id="cutaway-canvas-label" style="margin: 0; border-bottom: none; padding: 0;">fig 1. Test Device Cutaway</h2>
-            <label class="xray-toggle-label" style="font-family: var(--font-serif); font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
-              <input type="checkbox" id="chk-xray-mode" style="cursor: pointer; accent-color: #ff9f1c;"> 🔍 X-Ray View
+            <label style="font-family: var(--font-serif); font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+              🔍 Lens: 
+              <select id="select-lens" style="background: #1c1815; color: var(--text-ink); border: 1px solid var(--border-ink); font-family: var(--font-serif); font-size: 0.75rem; padding: 2px 4px; border-radius: 2px; cursor: pointer;">
+                <option value="none" selected>Standard View</option>
+                <option value="phlogiston">Phlogiston (Heat)</option>
+                <option value="tria_prima">Tria Prima (Residue)</option>
+                <option value="astraea">Astraea (Stress)</option>
+              </select>
             </label>
           </div>
           <div class="canvas-relative-container" style="position: relative; overflow: hidden; background: #080605; border-radius: 4px; border: 1px solid var(--border-ink);">
@@ -103,8 +109,14 @@
             <div class="timeline-slider-container">
               <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1">
             </div>
-            <button id="btn-clear-soot" class="btn-icon" title="Clean soot and residue out of the barrel">
-              🧹 CLEAN BORE
+            <button id="btn-wet-swab" class="btn-icon" title="Wash soot with wet sponge & cool barrel">
+              🧽 WET SWAB
+            </button>
+            <button id="btn-dry-swab" class="btn-icon" title="Dry out moisture from the bore">
+              🧹 DRY SWAB
+            </button>
+            <button id="btn-bush-vent" class="btn-icon" title="Bush/repair touch-hole vent erosion">
+              🝖 BUSH VENT
             </button>
             <button id="btn-repair-barrel" class="btn-icon" title="Repair, re-forge, or replace the barrel">
               🔩 REPAIR BARREL

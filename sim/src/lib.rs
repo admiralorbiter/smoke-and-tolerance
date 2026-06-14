@@ -33,9 +33,13 @@ pub struct ShotInput {
     pub saltpeter_purity: Option<f64>,
     pub weather_protection: Option<String>,
     pub target_armor_type: Option<String>,
+
+    pub persistent_temperature: Option<f64>,
+    pub is_swabbed_wet: Option<bool>,
+    pub touchhole_erosion: Option<f64>,
 }
 
-pub const STRIDE_COUNT: usize = 20;
+pub const STRIDE_COUNT: usize = 23;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +65,9 @@ pub struct ShotFrame {
     pub fouling_index: f64,         // persistent fouling index
     pub burn_profile_code: f64,     // code representing propellant profile
     pub barrel_fatigue: f64,        // cumulative barrel fatigue index
+    pub barrel_temperature: f64,
+    pub structural_strength_pct: f64,
+    pub touchhole_radius_current: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -134,6 +141,9 @@ pub fn simulate_shot(val: JsValue) -> Result<JsValue, JsValue> {
             FRAME_BUFFER.push(frame.fouling_index);
             FRAME_BUFFER.push(frame.burn_profile_code);
             FRAME_BUFFER.push(frame.barrel_fatigue);
+            FRAME_BUFFER.push(frame.barrel_temperature);
+            FRAME_BUFFER.push(frame.structural_strength_pct);
+            FRAME_BUFFER.push(frame.touchhole_radius_current);
         }
 
         let wasm_result = ShotResultWasm {

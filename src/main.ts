@@ -21,6 +21,9 @@ class LaboratoryApp {
   private hasFiredShot: boolean = false;
   private persistentFouling: number = 0.0;
   private persistentFatigue: number = 0.0;
+  private persistentTemperature: number = 293.15;
+  private isSwabbedWet: boolean = false;
+  private touchholeErosion: number = 0.0;
   private flawSeed: number = Math.floor(Math.random() * 1000000);
   private activeEra: string = 'hand_cannon';
 
@@ -126,12 +129,20 @@ class LaboratoryApp {
         }
         
         // Extract updated fouling and fatigue state from final frame (if not initial dummy shot)
+        // Extract updated fouling, fatigue, thermal, and erosion state from final frame (if not initial dummy shot)
         if (!this.isInitialLoad && frames.length > 0) {
-          this.persistentFouling = frames[frames.length - 1].foulingIndex;
+          const finalFrame = frames[frames.length - 1];
+          this.persistentFouling = finalFrame.foulingIndex;
           this.updateFoulingMeter();
           
-          this.persistentFatigue = frames[frames.length - 1].barrelFatigue;
+          this.persistentFatigue = finalFrame.barrelFatigue;
           this.updateFatigueMeter();
+
+          this.persistentTemperature = finalFrame.barrelTemperature;
+          this.updateTemperatureUI();
+
+          this.touchholeErosion = Math.max(0.0, (finalFrame.touchholeRadiusCurrent / 0.001) - 1.0);
+          this.updateErosionUI();
         }
         
         if (this.isInitialLoad) {
@@ -226,21 +237,6 @@ class LaboratoryApp {
             this.currentInputs
           );
         }
-      },
-      () => {
-        // Clean soot callback
-        this.persistentFouling = 0.0;
-        this.updateFoulingMeter();
-        this.renderer.setSootLevel(0);
-        
-        // Reset comparison
-        this.shotHistory = [];
-        this.comparisonPanel.hide();
-
-        this.selectTab('instruments');
-        AudioManager.getInstance().playCleanBore();
-        // Refire current settings
-        this.handleFireShot(this.controls.getInputs());
       }
     );
 
@@ -299,11 +295,11 @@ class LaboratoryApp {
       this.resetCustomBatch();
     });
 
-    // 6. X-Ray View & Repair Listeners
-    const chkXrayMode = document.getElementById('chk-xray-mode') as HTMLInputElement;
-    chkXrayMode?.addEventListener('change', () => {
-      const active = chkXrayMode.checked;
-      this.renderer.setXrayMode(active);
+    // 6. Viewport Lenses & Maintenance Listeners
+    const selectLens = document.getElementById('select-lens') as HTMLSelectElement;
+    selectLens?.addEventListener('change', () => {
+      const mode = selectLens.value;
+      this.renderer.setLensMode(mode);
       
       // Redraw immediately if we have frames loaded
       if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
@@ -317,6 +313,21 @@ class LaboratoryApp {
           );
         }
       }
+    });
+
+    const btnWetSwab = document.getElementById('btn-wet-swab');
+    btnWetSwab?.addEventListener('click', () => {
+      this.wetSwabBore();
+    });
+
+    const btnDrySwab = document.getElementById('btn-dry-swab');
+    btnDrySwab?.addEventListener('click', () => {
+      this.drySwabBore();
+    });
+
+    const btnBushVent = document.getElementById('btn-bush-vent');
+    btnBushVent?.addEventListener('click', () => {
+      this.bushVent();
     });
 
     const btnRepair = document.getElementById('btn-repair-barrel');
@@ -417,6 +428,40 @@ class LaboratoryApp {
 
     // Start continuous 60fps animation loop for sparkles and active glows
     this.startAnimationLoop();
+
+    // Start continuous idle cooling loop
+    this.startIdleCoolingLoop();
+  }
+
+  private startIdleCoolingLoop() {
+    let lastCoolTime = Date.now();
+    window.setInterval(() => {
+      const now = Date.now();
+      const dtSec = (now - lastCoolTime) / 1000.0;
+      lastCoolTime = now;
+      
+      // Only cool if not currently igniting/firing
+      if (this.persistentTemperature > 293.15 && !this.timeline.isPlaying && !this.isIgniting) {
+        const tempDiff = this.persistentTemperature - 293.15;
+        const coolingRate = 0.015; // K/sec per K diff
+        this.persistentTemperature = Math.max(293.15, this.persistentTemperature - coolingRate * dtSec * tempDiff);
+        
+        // Random cooling creaks if hot
+        if (this.persistentTemperature > 380.0 && Math.random() < 0.08 * dtSec) {
+          AudioManager.getInstance().playCoolingCreak();
+        }
+        
+        this.updateTemperatureUI();
+        
+        // Update current frame's temperature so the render loop draws it
+        if (this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
+          const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
+          if (frame) {
+            frame.barrelTemperature = this.persistentTemperature;
+          }
+        }
+      }
+    }, 200);
   }
 
   private selectTab(activeTab: 'instruments' | 'ledger' | 'charts' | 'codex') {
@@ -461,6 +506,9 @@ class LaboratoryApp {
     initialInputs.primingQuality = 100.0;
     initialInputs.persistentFouling = this.persistentFouling;
     initialInputs.persistentFatigue = this.persistentFatigue;
+    initialInputs.persistentTemperature = this.persistentTemperature;
+    initialInputs.isSwabbedWet = this.isSwabbedWet;
+    initialInputs.touchholeErosion = this.touchholeErosion;
     initialInputs.flawSeed = this.flawSeed;
     initialInputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
@@ -486,6 +534,9 @@ class LaboratoryApp {
     this.hasFiredShot = true;
     inputs.persistentFouling = this.persistentFouling;
     inputs.persistentFatigue = this.persistentFatigue;
+    inputs.persistentTemperature = this.persistentTemperature;
+    inputs.isSwabbedWet = this.isSwabbedWet;
+    inputs.touchholeErosion = this.touchholeErosion;
     inputs.flawSeed = this.flawSeed;
     inputs.weatherProtection = this.activeWeatherProtection;
     if (this.customMixActive) {
@@ -1021,6 +1072,16 @@ class LaboratoryApp {
     this.persistentFatigue = 0.0;
     this.updateFatigueMeter();
     
+    // Reset thermal & erosion state
+    this.persistentTemperature = 293.15;
+    this.isSwabbedWet = false;
+    this.touchholeErosion = 0.0;
+    this.persistentFouling = 0.0;
+
+    this.updateTemperatureUI();
+    this.updateErosionUI();
+    this.updateFoulingMeter();
+    
     // Decouple/clear comparison history
     this.shotHistory = [];
     this.comparisonPanel.hide();
@@ -1043,6 +1104,151 @@ class LaboratoryApp {
     // Refire current settings (initial setup shot) as a static layout update
     this.isEraSwitchLoad = true;
     this.handleInitialState();
+  }
+
+  private wetSwabBore() {
+    this.persistentFouling = Math.max(0.0, this.persistentFouling - 0.80);
+    this.persistentTemperature = Math.max(293.15, this.persistentTemperature - 150.0);
+    this.isSwabbedWet = true;
+
+    this.updateFoulingMeter();
+    this.updateTemperatureUI();
+
+    // Trigger steam burst animation and sound
+    AudioManager.getInstance().playWetSwab();
+    this.renderer.triggerSteamBurst();
+    this.animateSwabbing(1000);
+
+    // Reset comparison
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+
+    this.selectTab('instruments');
+    
+    // Refire current settings
+    this.isEraSwitchLoad = true;
+    this.handleInitialState();
+  }
+
+  private drySwabBore() {
+    this.persistentFouling = Math.max(0.0, this.persistentFouling - 0.20);
+    this.persistentTemperature = Math.max(293.15, this.persistentTemperature - 20.0);
+    this.isSwabbedWet = false;
+
+    this.updateFoulingMeter();
+    this.updateTemperatureUI();
+
+    AudioManager.getInstance().playDrySwab();
+
+    // Reset comparison
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+
+    this.selectTab('instruments');
+
+    // Refire current settings
+    this.isEraSwitchLoad = true;
+    this.handleInitialState();
+  }
+
+  private bushVent() {
+    this.touchholeErosion = 0.0;
+    this.updateErosionUI();
+
+    AudioManager.getInstance().playBushVent();
+
+    // Reset comparison
+    this.shotHistory = [];
+    this.comparisonPanel.hide();
+
+    this.selectTab('instruments');
+
+    // Refire current settings
+    this.isEraSwitchLoad = true;
+    this.handleInitialState();
+  }
+
+  private animateSwabbing(durationMs: number = 1000) {
+    const startTime = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < durationMs) {
+        if (this.currentInputs && this.lastRenderedFrames.length > 0) {
+          const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
+          this.renderer.drawFrame(
+            frame,
+            this.currentInputs,
+            !this.timeline.isPlaying,
+            this.shotHistory
+          );
+        }
+        requestAnimationFrame(tick);
+      }
+    };
+    tick();
+  }
+
+  private updateTemperatureUI() {
+    const tempVal = this.persistentTemperature;
+    
+    const bar = document.getElementById('temperature-meter-bar') as HTMLDivElement;
+    const text = document.getElementById('temperature-meter-text') as HTMLSpanElement;
+    if (bar && text) {
+      const percentage = Math.min(100, Math.max(0, ((tempVal - 293.15) / 300.0) * 100));
+      bar.style.width = `${percentage}%`;
+      text.textContent = tempVal > 450.0 ? `⚠️ DANGER: HOT (${tempVal.toFixed(0)}K)` : `STABLE (${tempVal.toFixed(0)}K)`;
+      bar.style.background = tempVal > 450.0 ? '#ff3c00' : 'linear-gradient(90deg, #ff9f1c 0%, #ff5c00 100%)';
+    }
+
+    const pyroFill = document.getElementById('rect-pyro-fill') as unknown as SVGElement;
+    const pyroTextVal = document.getElementById('txt-temperature') as HTMLSpanElement;
+    const pyroTextStage = document.getElementById('txt-heat-stage') as HTMLDivElement;
+    
+    if (pyroTextVal) {
+      pyroTextVal.textContent = `${tempVal.toFixed(2)} K`;
+    }
+    
+    if (pyroFill) {
+      const height = Math.min(130, Math.max(0, ((tempVal - 293.15) / 2100.0) * 130));
+      pyroFill.setAttribute('y', (140 - height).toString());
+      pyroFill.setAttribute('height', height.toString());
+    }
+
+    if (pyroTextStage) {
+      if (tempVal > 1800) {
+        pyroTextStage.textContent = 'IGNIS VERTICALIS';
+        pyroTextStage.style.color = '#fff';
+      } else if (tempVal > 1200) {
+        pyroTextStage.textContent = 'IGNIS FLAMMAE';
+        pyroTextStage.style.color = '#ff9f1c';
+      } else if (tempVal > 500) {
+        pyroTextStage.textContent = 'IGNIS SOLIS';
+        pyroTextStage.style.color = '#ffb703';
+      } else {
+        pyroTextStage.textContent = 'IGNIS FATUUS';
+        pyroTextStage.style.color = '#8c7662';
+      }
+    }
+
+    const banner = document.getElementById('prefire-warning-banner');
+    if (banner) {
+      if (tempVal > 450.0) {
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+  }
+
+  private updateErosionUI() {
+    const bar = document.getElementById('erosion-meter-bar') as HTMLDivElement;
+    const text = document.getElementById('erosion-meter-text') as HTMLSpanElement;
+    if (bar && text) {
+      const percentage = Math.min(100, Math.max(0, this.touchholeErosion * 100));
+      bar.style.width = `${percentage}%`;
+      text.textContent = this.touchholeErosion > 0.5 ? `⚠️ ERODED (+${this.touchholeErosion.toFixed(2)}x)` : `GOOD (+${this.touchholeErosion.toFixed(2)}x)`;
+      bar.style.background = this.touchholeErosion > 0.5 ? '#9e2a2b' : 'linear-gradient(90deg, #8c7662 0%, #d94e34 100%)';
+    }
   }
 
   private updateFatigueMeter() {
@@ -1085,10 +1291,22 @@ class LaboratoryApp {
       btn.style.pointerEvents = active ? 'none' : 'auto';
     });
 
-    const btnClean = document.getElementById('btn-clear-soot') as HTMLButtonElement;
-    if (btnClean) {
-      btnClean.disabled = active;
-      btnClean.style.opacity = active ? '0.6' : '1.0';
+    const btnWetSwab = document.getElementById('btn-wet-swab') as HTMLButtonElement;
+    if (btnWetSwab) {
+      btnWetSwab.disabled = active;
+      btnWetSwab.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const btnDrySwab = document.getElementById('btn-dry-swab') as HTMLButtonElement;
+    if (btnDrySwab) {
+      btnDrySwab.disabled = active;
+      btnDrySwab.style.opacity = active ? '0.6' : '1.0';
+    }
+
+    const btnBushVent = document.getElementById('btn-bush-vent') as HTMLButtonElement;
+    if (btnBushVent) {
+      btnBushVent.disabled = active;
+      btnBushVent.style.opacity = active ? '0.6' : '1.0';
     }
 
     const btnRepair = document.getElementById('btn-repair-barrel') as HTMLButtonElement;
@@ -1134,8 +1352,12 @@ class LaboratoryApp {
       if (this.currentInputs && this.lastRenderedFrames && this.lastRenderedFrames.length > 0) {
         const frame = this.lastRenderedFrames[this.lastRenderedFrameIndex];
         if (frame) {
-          const isPlayOrSetup = this.timeline.isPlaying || frame.stage === 'setup' || frame.stage === 'ignition';
-          if (isPlayOrSetup) {
+          const shouldDraw = this.timeline.isPlaying || 
+                             frame.stage === 'setup' || 
+                             frame.stage === 'ignition' || 
+                             this.renderer.lensMode !== 'none' ||
+                             this.persistentTemperature > 293.15;
+          if (shouldDraw) {
             this.renderer.drawFrame(
               frame,
               this.currentInputs,

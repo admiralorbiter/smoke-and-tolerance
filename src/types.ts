@@ -26,9 +26,38 @@ export interface ShotInput {
   persistentFatigue: number;
   flawSeed: number;
   targetArmorType?: string;
+  persistentTemperature?: number; // Kelvin
+  isSwabbedWet?: boolean;
+  touchholeErosion?: number;
 }
 
-export const FRAME_STRIDE = 20;
+export const FRAME_STRIDE = 23;
+
+export enum FrameOffset {
+  T = 0,
+  TIME_MS = 1,
+  PROJECTILE_X = 2,
+  PROJECTILE_Y = 3,
+  PROJECTILE_V = 4,
+  PRESSURE = 5,
+  LEAKAGE = 6,
+  BARREL_STRESS = 7,
+  SMOKE = 8,
+  FOULING = 9,
+  AIM_OFFSET = 10,
+  STAGE_CODE = 11,
+  UNBURNED_MASS = 12,
+  GAS_MASS = 13,
+  TEMPERATURE = 14,
+  GRAIN_RADIUS = 15,
+  WALL_HEAT_LOSS = 16,
+  FOULING_INDEX = 17,
+  BURN_PROFILE_CODE = 18,
+  BARREL_FATIGUE = 19,
+  BARREL_TEMPERATURE = 20,
+  STRUCTURAL_STRENGTH_PCT = 21,
+  TOUCHHOLE_RADIUS_CURRENT = 22,
+}
 
 export interface ShotFrame {
   t: number;
@@ -52,6 +81,9 @@ export interface ShotFrame {
   foulingIndex: number;
   burnProfileCode: number;
   barrelFatigue: number;
+  barrelTemperature: number;
+  structuralStrengthPercent: number;
+  touchholeRadiusCurrent: number;
 }
 
 export interface DiagnosisEntry {
@@ -105,14 +137,16 @@ export function parseFramesFromBuffer(
 
   for (let i = 0; i < count; i++) {
     const startIdx = floatOffset + i * FRAME_STRIDE;
-    const stageCode = buffer[startIdx + 11];
+    const stageCode = buffer[startIdx + FrameOffset.STAGE_CODE];
     const stage = stageMapping[Math.round(stageCode)] || "aftermath";
 
     // Deduce warning text for UI feedback based on physical parameters
     const warnings: string[] = [];
-    const pressure = buffer[startIdx + 5];
-    const leakage = buffer[startIdx + 6];
-    const stress = buffer[startIdx + 7];
+    const pressure = buffer[startIdx + FrameOffset.PRESSURE];
+    const leakage = buffer[startIdx + FrameOffset.LEAKAGE];
+    const stress = buffer[startIdx + FrameOffset.BARREL_STRESS];
+    const btemp = buffer[startIdx + FrameOffset.BARREL_TEMPERATURE];
+    const strPct = buffer[startIdx + FrameOffset.STRUCTURAL_STRENGTH_PCT];
 
     if (stage === "ignition") {
       warnings.push("Priming powder burning...");
@@ -128,28 +162,38 @@ export function parseFramesFromBuffer(
       }
     }
 
+    if (btemp > 500.0) {
+      warnings.push("⚠️ DANGEROUS BARREL HEAT!");
+    }
+    if (strPct < 40.0) {
+      warnings.push("⚠️ CRITICAL MATERIAL DEGRADATION!");
+    }
+
     frames.push({
-      t: buffer[startIdx + 0],
-      timeMs: buffer[startIdx + 1],
-      projectileX: buffer[startIdx + 2],
-      projectileY: buffer[startIdx + 3],
-      projectileVelocity: buffer[startIdx + 4],
+      t: buffer[startIdx + FrameOffset.T],
+      timeMs: buffer[startIdx + FrameOffset.TIME_MS],
+      projectileX: buffer[startIdx + FrameOffset.PROJECTILE_X],
+      projectileY: buffer[startIdx + FrameOffset.PROJECTILE_Y],
+      projectileVelocity: buffer[startIdx + FrameOffset.PROJECTILE_V],
       pressure,
       leakage,
       barrelStress: stress,
-      smoke: buffer[startIdx + 8],
-      fouling: buffer[startIdx + 9],
-      aimOffset: buffer[startIdx + 10],
+      smoke: buffer[startIdx + FrameOffset.SMOKE],
+      fouling: buffer[startIdx + FrameOffset.FOULING],
+      aimOffset: buffer[startIdx + FrameOffset.AIM_OFFSET],
       stage,
       warnings,
-      unburnedMass: buffer[startIdx + 12],
-      gasMass: buffer[startIdx + 13],
-      temperature: buffer[startIdx + 14],
-      grainRadius: buffer[startIdx + 15],
-      wallHeatLoss: buffer[startIdx + 16],
-      foulingIndex: buffer[startIdx + 17],
-      burnProfileCode: buffer[startIdx + 18],
-      barrelFatigue: buffer[startIdx + 19],
+      unburnedMass: buffer[startIdx + FrameOffset.UNBURNED_MASS],
+      gasMass: buffer[startIdx + FrameOffset.GAS_MASS],
+      temperature: buffer[startIdx + FrameOffset.TEMPERATURE],
+      grainRadius: buffer[startIdx + FrameOffset.GRAIN_RADIUS],
+      wallHeatLoss: buffer[startIdx + FrameOffset.WALL_HEAT_LOSS],
+      foulingIndex: buffer[startIdx + FrameOffset.FOULING_INDEX],
+      burnProfileCode: buffer[startIdx + FrameOffset.BURN_PROFILE_CODE],
+      barrelFatigue: buffer[startIdx + FrameOffset.BARREL_FATIGUE],
+      barrelTemperature: btemp,
+      structuralStrengthPercent: strPct,
+      touchholeRadiusCurrent: buffer[startIdx + FrameOffset.TOUCHHOLE_RADIUS_CURRENT],
     });
   }
 

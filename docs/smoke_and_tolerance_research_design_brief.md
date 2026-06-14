@@ -457,51 +457,78 @@ export type ShotOutcome =
   | "target_hit"
   | "target_miss";
 
+export interface AlchemicalMix {
+  saltpeterRatio: number; // 0 - 100
+  charcoalRatio: number;  // 0 - 100
+  sulfurRatio: number;    // 0 - 100
+  charcoalSource: 'willow' | 'alder' | 'oak';
+  saltpeterPurity: number; // 0 - 100
+  weatherProtection?: string;
+}
+
 export interface ShotInput {
-  propellantCondition: number; // 0-100, abstract
-  projectileFit: number;      // 0-100, abstract
-  barrelQuality: number;      // 0-100, abstract
-  humidity: number;           // 0-100, abstract
-  operatorSteadiness: number; // 0-100, abstract
-  seed: number;
+  barrelMaterial: string;
+  propellantType: string;
+  refinementLevel: number;
+  projectileType: string;
+  sealingQuality: string;
+  weatherHumidity: number;
+  weatherWind: number;
+  weatherRain: number;
+  primingQuality: number;
+  seed: bigint;
+  weatherProtection?: string;
+  persistentFouling: number;
+  propellantProfile: string;
+  customMixActive?: boolean;
+  alchemicalMix?: AlchemicalMix;
+  persistentFatigue: number;
+  flawSeed: number;
+  targetArmorType?: string;
+  persistentTemperature?: number; // Kelvin
+  isSwabbedWet?: boolean;
+  touchholeErosion?: number;
 }
 
 export interface ShotFrame {
-  t: number;                 // normalized time, 0-1
-  stage:
-    | "setup"
-    | "ignition"
-    | "pressure"
-    | "movement"
-    | "muzzle_exit"
-    | "flight"
-    | "impact"
-    | "aftermath";
-
-  projectileX: number;       // normalized barrel position, 0-1
-  projectileVelocity: number;// abstract visualization value
-  pressure: number;          // abstract visualization value
-  leakage: number;           // abstract visualization value
-  barrelStress: number;      // abstract visualization value
-  smoke: number;             // abstract visualization value
-  fouling: number;           // abstract visualization value
-  aimOffset: number;         // abstract visualization value
+  t: number;
+  timeMs: number;
+  stage: string;
+  projectileX: number;
+  projectileY: number;
+  projectileVelocity: number;
+  pressure: number;
+  leakage: number;
+  barrelStress: number;
+  smoke: number;
+  fouling: number;
+  aimOffset: number;
   warnings: string[];
+  unburnedMass: number;
+  gasMass: number;
+  temperature: number;
+  grainRadius: number;
+  wallHeatLoss: number;
+  foulingIndex: number;
+  burnProfileCode: number;
+  barrelFatigue: number;
+  barrelTemperature: number;
+  structuralStrengthPercent: number;
+  touchholeRadiusCurrent: number;
 }
 
 export interface ShotResult {
   input: ShotInput;
   frames: ShotFrame[];
-  outcomes: ShotOutcome[];
+  outcomes: string[];
   diagnosis: DiagnosisEntry[];
   summary: string;
 }
 
 export interface DiagnosisEntry {
-  severity: "info" | "warning" | "critical";
+  severity: 'info' | 'warning' | 'critical';
   title: string;
   explanation: string;
-  relatedVariables: Array<keyof ShotInput>;
 }
 ```
 

@@ -6,20 +6,112 @@ const BARREL_LIMITS: Record<string, { yield: number; ultimate: number }> = {
   cast_bronze: { yield: 160.0, ultimate: 280.0 },
 };
 
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+  active: boolean;
+}
+
 export class CutawayRenderer {
   private cutawayCanvas: HTMLCanvasElement;
   private cutawayCtx: CanvasRenderingContext2D;
   private trajectoryCanvas: HTMLCanvasElement;
   private trajectoryCtx: CanvasRenderingContext2D;
   private sootLevel: number = 0; // accumulated fouling level
-  public xrayMode: boolean = false;
   private activeFrames: ShotFrame[] = [];
+
+  public lensMode: string = 'none';
+  private particlePool: Particle[] = [];
+  private lastUpdateTime: number = Date.now();
+
+  public get xrayMode(): boolean {
+    return this.lensMode !== 'none';
+  }
+  public set xrayMode(enabled: boolean) {
+    this.lensMode = enabled ? 'phlogiston' : 'none';
+  }
 
   constructor(cutawayCanvasId: string, trajectoryCanvasId: string) {
     this.cutawayCanvas = document.getElementById(cutawayCanvasId) as HTMLCanvasElement;
     this.cutawayCtx = this.cutawayCanvas.getContext('2d') as CanvasRenderingContext2D;
     this.trajectoryCanvas = document.getElementById(trajectoryCanvasId) as HTMLCanvasElement;
     this.trajectoryCtx = this.trajectoryCanvas.getContext('2d') as CanvasRenderingContext2D;
+    this.initParticlePool();
+  }
+
+  private initParticlePool() {
+    this.particlePool = [];
+    for (let i = 0; i < 300; i++) {
+      this.particlePool.push({
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        life: 0,
+        maxLife: 0,
+        color: '',
+        size: 0,
+        active: false
+      });
+    }
+  }
+
+  private spawnParticle(x: number, y: number, vx: number, vy: number, maxLife: number, color: string, size: number) {
+    const p = this.particlePool.find(part => !part.active);
+    if (p) {
+      p.x = x;
+      p.y = y;
+      p.vx = vx;
+      p.vy = vy;
+      p.life = 0;
+      p.maxLife = maxLife;
+      p.color = color;
+      p.size = size;
+      p.active = true;
+    }
+  }
+
+  private updateAndDrawParticles(ctx: CanvasRenderingContext2D, dtMs: number) {
+    const dt = dtMs / 1000.0;
+    for (const p of this.particlePool) {
+      if (!p.active) continue;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        p.active = false;
+        continue;
+      }
+      
+      const opacity = 1.0 - (p.life / p.maxLife);
+      ctx.fillStyle = p.color.replace('OPACITY', opacity.toFixed(2));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  public triggerSteamBurst() {
+    const barrelLeft = 60;
+    const barrelLengthPx = 440;
+    const centerY = this.lensMode !== 'none' ? 225 : 320;
+    const boreRadiusPx = this.lensMode !== 'none' ? 55 : 40;
+    
+    for (let i = 0; i < 150; i++) {
+      const px = barrelLeft + Math.random() * barrelLengthPx;
+      const py = centerY + (Math.random() - 0.5) * (boreRadiusPx * 2);
+      const vx = (Math.random() - 0.5) * 60;
+      const vy = -40 - Math.random() * 80;
+      const life = 0.4 + Math.random() * 0.8;
+      const size = 1.5 + Math.random() * 3.5;
+      this.spawnParticle(px, py, vx, vy, life, 'rgba(220, 220, 230, OPACITY)', size);
+    }
   }
 
   public setFrames(frames: ShotFrame[]) {
@@ -27,7 +119,11 @@ export class CutawayRenderer {
   }
 
   public setXrayMode(enabled: boolean) {
-    this.xrayMode = enabled;
+    this.lensMode = enabled ? 'phlogiston' : 'none';
+  }
+
+  public setLensMode(mode: string) {
+    this.lensMode = mode;
   }
 
   public setSootLevel(level: number) {
@@ -153,31 +249,96 @@ export class CutawayRenderer {
     const redGlow = Math.min(1.0, frame.wallHeatLoss / maxHeatLoss);
 
     // Inside bore background
-    ctx.fillStyle = '#0c0a09';
+    ctx.fillStyle = this.lensMode === 'tria_prima' ? '#0d0b12' : '#0c0a09';
     ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, boreRadiusPx * 2);
 
-    // Draw Soot deposits (Fouling) inside the bore walls
-    if (this.sootLevel > 0.02) {
-      ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.85, this.sootLevel * 0.95)})`;
-      ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, 4);
-      ctx.fillRect(barrelLeft, centerY + boreRadiusPx - 4, barrelLengthPx, 4);
-
-      // Draw jagged carbon crust bumps for high fouling levels
-      if (this.sootLevel > 0.5) {
-        ctx.fillStyle = `rgba(10, 8, 7, ${Math.min(0.95, this.sootLevel)})`;
-        // Draw top bore wall bumps
-        for (let x = barrelLeft + 10; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+    if (this.lensMode === 'tria_prima') {
+      const soot = frame.foulingIndex;
+      
+      // 1. Soot deposits: dark charcoal overlays
+      if (soot > 0.01) {
+        ctx.fillStyle = `rgba(10, 8, 8, ${Math.min(0.9, soot * 0.95)})`;
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, 8);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx - 8, barrelLengthPx, 8);
+        
+        let seed = 4321;
+        for (let i = 0; i < 25; i++) {
+          seed = (seed * 9301 + 49297) % 233280;
+          const px = barrelLeft + (seed / 233280) * barrelLengthPx;
+          seed = (seed * 9301 + 49297) % 233280;
+          const py = centerY - boreRadiusPx + 8 + (seed / 233280) * (boreRadiusPx * 2 - 16);
+          seed = (seed * 9301 + 49297) % 233280;
+          const r = 2.5 + (seed / 233280) * 6;
+          
           ctx.beginPath();
-          const height = 3 + Math.sin(x * 0.5) * 2.5;
-          ctx.arc(x, centerY - boreRadiusPx + 2, height, 0, Math.PI * 2);
+          ctx.arc(px, py, r, 0, Math.PI * 2);
           ctx.fill();
         }
-        // Draw bottom bore wall bumps
-        for (let x = barrelLeft + 15; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+      }
+
+      // 2. Sulfur deposits: yellowish-green crystallizations
+      if (soot > 0.04) {
+        let seed = 8765;
+        for (let i = 0; i < 20; i++) {
+          seed = (seed * 9301 + 49297) % 233280;
+          const px = barrelLeft + (seed / 233280) * barrelLengthPx;
+          seed = (seed * 9301 + 49297) % 233280;
+          const py = centerY - boreRadiusPx + 8 + (seed / 233280) * (boreRadiusPx * 2 - 16);
+          seed = (seed * 9301 + 49297) % 233280;
+          const r = 1.5 + (seed / 233280) * 4;
+          
+          ctx.fillStyle = `rgba(${Math.round(195 + (seed % 40))}, ${Math.round(180 + (seed % 30))}, 55, ${Math.min(0.65, soot * 0.9)})`;
           ctx.beginPath();
-          const height = 3 + Math.cos(x * 0.5) * 2.5;
-          ctx.arc(x, centerY + boreRadiusPx - 2, height, 0, Math.PI * 2);
+          ctx.arc(px, py, r, 0, Math.PI * 2);
           ctx.fill();
+        }
+      }
+
+      // 3. Wet Swab Moisture: blue drops/streaks if isSwabbedWet is true
+      if (inputs.isSwabbedWet) {
+        ctx.fillStyle = 'rgba(80, 150, 240, 0.45)';
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, 4);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx - 4, barrelLengthPx, 4);
+        
+        let seed = 9999;
+        for (let i = 0; i < 15; i++) {
+          seed = (seed * 9301 + 49297) % 233280;
+          const px = barrelLeft + (seed / 233280) * barrelLengthPx;
+          seed = (seed * 9301 + 49297) % 233280;
+          const py = centerY - boreRadiusPx + 10 + (seed / 233280) * (boreRadiusPx * 2 - 20);
+          seed = (seed * 9301 + 49297) % 233280;
+          const r = 2 + (seed / 233280) * 3;
+          
+          ctx.fillStyle = 'rgba(100, 180, 255, 0.65)';
+          ctx.beginPath();
+          ctx.arc(px, py, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      // Draw Soot deposits (Fouling) inside the bore walls
+      if (this.sootLevel > 0.02) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.85, this.sootLevel * 0.95)})`;
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx, barrelLengthPx, 4);
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx - 4, barrelLengthPx, 4);
+
+        // Draw jagged carbon crust bumps for high fouling levels
+        if (this.sootLevel > 0.5) {
+          ctx.fillStyle = `rgba(10, 8, 7, ${Math.min(0.95, this.sootLevel)})`;
+          // Draw top bore wall bumps
+          for (let x = barrelLeft + 10; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+            ctx.beginPath();
+            const height = 3 + Math.sin(x * 0.5) * 2.5;
+            ctx.arc(x, centerY - boreRadiusPx + 2, height, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Draw bottom bore wall bumps
+          for (let x = barrelLeft + 15; x < barrelLeft + barrelLengthPx - 10; x += 15) {
+            ctx.beginPath();
+            const height = 3 + Math.cos(x * 0.5) * 2.5;
+            ctx.arc(x, centerY + boreRadiusPx - 2, height, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }
@@ -297,51 +458,109 @@ export class CutawayRenderer {
       }
     } else {
       // Normal Walls
-      // Top wall
-      ctx.fillStyle = wallColor;
-      ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
-      if (redGlow > 0.01) {
-        ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
-        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
-      }
-      ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+      if (this.lensMode === 'phlogiston') {
+        const temp = frame.barrelTemperature;
+        const normTemp = Math.min(1.0, Math.max(0.0, (temp - 293.15) / 300.0)); // 0 to 1
+        
+        // Spawn heat particles inside the walls
+        if (Math.random() < normTemp * 0.4) {
+          const px = barrelLeft + Math.random() * barrelLengthPx;
+          const py = centerY - boreRadiusPx - Math.random() * wallThickness;
+          this.spawnParticle(px, py, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 3, 1.0 + Math.random() * 1.5, 'rgba(255, 120, 40, OPACITY)', 1.0 + Math.random() * 1.5);
+        }
+        if (Math.random() < normTemp * 0.4) {
+          const px = barrelLeft + Math.random() * barrelLengthPx;
+          const py = centerY + boreRadiusPx + Math.random() * wallThickness;
+          this.spawnParticle(px, py, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 3, 1.0 + Math.random() * 1.5, 'rgba(255, 120, 40, OPACITY)', 1.0 + Math.random() * 1.5);
+        }
 
-      // Bottom wall
-      ctx.fillStyle = wallColor;
-      ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
-      if (redGlow > 0.01) {
-        ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
+        // Thermal color map
+        const rColor = Math.round(40 + normTemp * 215);
+        const gColor = Math.round(25 + normTemp * 115);
+        const bColor = Math.round(20 + normTemp * 15);
+        const glowColor = `rgba(${rColor}, ${gColor}, ${bColor}, 0.95)`;
+        
+        ctx.fillStyle = glowColor;
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+
         ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
+        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
+      } else {
+        // Top wall
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+        if (redGlow > 0.01) {
+          ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
+          ctx.fillRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+        }
+        ctx.strokeRect(barrelLeft, centerY - boreRadiusPx - wallThickness, barrelLengthPx, wallThickness);
+
+        // Bottom wall
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
+        if (redGlow > 0.01) {
+          ctx.fillStyle = `rgba(158, 42, 43, ${redGlow * 0.75})`;
+          ctx.fillRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
+        }
+        ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
       }
-      ctx.strokeRect(barrelLeft, centerY + boreRadiusPx, barrelLengthPx, wallThickness);
     }
 
     // --- DRAW X-RAY METALLURGICAL CRACKS ---
-    if (this.xrayMode && !isRuptured && frame.barrelFatigue > 0) {
+    if (this.xrayMode && !isRuptured) {
       ctx.save();
-      
-      let seed = inputs.flawSeed || 12345;
-      const pseudoRandom = () => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
-      };
 
-      const getCrackColor = (fatigue: number) => {
-        const pulse = Math.sin(Date.now() * 0.005);
-        const r = Math.floor(220 + pulse * 35);
-        const g = Math.floor(80 + pulse * 20 * (1.0 - fatigue));
-        const b = 20;
-        const opacity = 0.5 + fatigue * 0.5;
-        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-      };
+      // If in Astraea Lens mode, draw stress lines radiating from the back chamber
+      if (this.lensMode === 'astraea') {
+        const stress = frame.barrelStress;
+        const maxStress = limits.ultimate;
+        const normStress = Math.min(1.0, stress / maxStress);
+        
+        ctx.strokeStyle = `rgba(200, 235, 255, ${0.08 + normStress * 0.35})`;
+        ctx.lineWidth = 1.0;
+        for (let r = boreRadiusPx + 2; r < boreRadiusPx + wallThickness - 2; r += 4) {
+          ctx.beginPath();
+          ctx.arc(barrelLeft + 45, centerY, r, -Math.PI / 2, Math.PI / 2);
+          ctx.stroke();
+        }
+      }
 
-      const crackColor = getCrackColor(frame.barrelFatigue);
-      ctx.strokeStyle = crackColor;
-      ctx.lineWidth = 1.2 + frame.barrelFatigue * 2.0;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.shadowBlur = 4 + frame.barrelFatigue * 6;
-      ctx.shadowColor = crackColor;
+      if (frame.barrelFatigue > 0) {
+        let seed = inputs.flawSeed || 12345;
+        const pseudoRandom = () => {
+          seed = (seed * 9301 + 49297) % 233280;
+          return seed / 233280;
+        };
+
+        const getCrackColor = (fatigue: number) => {
+          if (this.lensMode === 'astraea') {
+            const pulse = Math.sin(Date.now() * 0.01) * 0.15 + 0.85;
+            const opacity = 0.6 + fatigue * 0.4;
+            return `rgba(220, 245, 255, ${opacity * pulse})`;
+          }
+          const pulse = Math.sin(Date.now() * 0.005);
+          const r = Math.floor(220 + pulse * 35);
+          const g = Math.floor(80 + pulse * 20 * (1.0 - fatigue));
+          const b = 20;
+          const opacity = 0.5 + fatigue * 0.5;
+          return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        };
+
+        const crackColor = getCrackColor(frame.barrelFatigue);
+        ctx.strokeStyle = crackColor;
+        
+        if (this.lensMode === 'astraea') {
+          ctx.lineWidth = 1.5 + frame.barrelFatigue * 3.0;
+          ctx.shadowBlur = 6 + frame.barrelFatigue * 10;
+          ctx.shadowColor = 'rgba(0, 195, 255, 0.85)';
+        } else {
+          ctx.lineWidth = 1.2 + frame.barrelFatigue * 2.0;
+          ctx.shadowBlur = 4 + frame.barrelFatigue * 6;
+          ctx.shadowColor = crackColor;
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
       if (barrelMaterial === 'bamboo') {
         // Horizontal/longitudinal split lines
@@ -430,6 +649,7 @@ export class CutawayRenderer {
             ctx.stroke();
           }
         });
+      }
       }
       ctx.restore();
     }
@@ -980,42 +1200,74 @@ export class CutawayRenderer {
         ctx.fill();
       }
     }
+
+    // Render dynamic pooled particles (steam, cooling creaks, phlogiston particles)
+    const now = Date.now();
+    const dtMs = now - this.lastUpdateTime;
+    this.lastUpdateTime = now;
+    this.updateAndDrawParticles(ctx, Math.min(100, dtMs));
     
     this.cutawayCtx.restore(); // camera shake restore
 
-    // Draw copper-rimmed lens overlay if in xrayMode
-    if (this.xrayMode) {
+    // Draw copper-rimmed lens overlay if in lens mode
+    if (this.lensMode !== 'none') {
       const ctx = this.cutawayCtx;
       const w = this.cutawayCanvas.width;
       const h = this.cutawayCanvas.height;
       ctx.save();
       
-      // Radial lens vignette using copper/rust colors
-      const grad = ctx.createRadialGradient(w / 2, h / 2, w / 4, w / 2, h / 2, w / 2);
-      grad.addColorStop(0, 'rgba(200, 125, 85, 0.0)');
-      grad.addColorStop(0.7, 'rgba(120, 65, 35, 0.12)');
-      grad.addColorStop(1.0, 'rgba(40, 20, 10, 0.45)');
-      ctx.fillStyle = grad;
+      let vignetteGrad = ctx.createRadialGradient(w / 2, h / 2, w / 4, w / 2, h / 2, w / 2);
+      let bezelColor = '#a66846';
+      let titleText = '🔍 ALCHEMICAL VIEWPORT ACTIVE';
+      let detailText = '';
+      let detailColor = '#bfa085';
+
+      if (this.lensMode === 'phlogiston') {
+        vignetteGrad.addColorStop(0, 'rgba(255, 95, 28, 0.0)');
+        vignetteGrad.addColorStop(0.7, 'rgba(180, 50, 20, 0.15)');
+        vignetteGrad.addColorStop(1.0, 'rgba(70, 15, 5, 0.55)');
+        bezelColor = '#9e2a2b';
+        titleText = '🔥 PHLOGISTON LENS (THERMAL DYNAMICS)';
+        detailText = `BARREL TEMP: ${frame.barrelTemperature.toFixed(1)} K`;
+        detailColor = frame.barrelTemperature > 450.0 ? '#ff3c00' : '#ff9f1c';
+      } else if (this.lensMode === 'tria_prima') {
+        vignetteGrad.addColorStop(0, 'rgba(155, 80, 220, 0.0)');
+        vignetteGrad.addColorStop(0.7, 'rgba(80, 30, 120, 0.12)');
+        vignetteGrad.addColorStop(1.0, 'rgba(30, 10, 50, 0.55)');
+        bezelColor = '#c29f5d';
+        titleText = '🜏 TRIA PRIMA LENS (CHEMICAL DEPOSITS)';
+        detailText = `BORE FOULING: ${(frame.foulingIndex * 100).toFixed(1)}%`;
+        detailColor = '#e0b034';
+      } else if (this.lensMode === 'astraea') {
+        vignetteGrad.addColorStop(0, 'rgba(80, 180, 240, 0.0)');
+        vignetteGrad.addColorStop(0.7, 'rgba(40, 90, 150, 0.12)');
+        vignetteGrad.addColorStop(1.0, 'rgba(10, 30, 60, 0.55)');
+        bezelColor = '#8fa2a6';
+        titleText = '⚖️ ASTRAEA LENS (STRUCTURAL STRESS)';
+        detailText = `HOOP STRESS: ${frame.barrelStress.toFixed(1)} MPa (${(frame.structuralStrengthPercent).toFixed(1)}% STRENGTH)`;
+        detailColor = frame.structuralStrengthPercent < 50.0 ? '#ff3c00' : '#8fa2a6';
+      }
+
+      ctx.fillStyle = vignetteGrad;
       ctx.fillRect(0, 0, w, h);
       
-      // Copper bezel / frame around the edges of the canvas
-      ctx.strokeStyle = '#a66846'; // copper metal
+      // Outer bezel
+      ctx.strokeStyle = bezelColor;
       ctx.lineWidth = 4;
       ctx.strokeRect(4, 4, w - 8, h - 8);
       
-      // Subtle inner gold/copper highlight
-      ctx.strokeStyle = 'rgba(230, 170, 110, 0.3)';
+      // Inner highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.lineWidth = 1;
       ctx.strokeRect(7, 7, w - 14, h - 14);
 
-      // Tech details text in corners
+      // Title & Telemetry text
       ctx.fillStyle = '#bfa085';
       ctx.font = 'normal 9px Share Tech Mono, monospace';
-      ctx.fillText('🔍 METALLURGICAL LENS ACTIVE', 15, 20);
+      ctx.fillText(titleText, 15, 20);
       
-      const fatiguePct = (frame.barrelFatigue * 100).toFixed(1);
-      ctx.fillStyle = frame.barrelFatigue > 0.8 ? '#ff3c00' : frame.barrelFatigue > 0.4 ? '#ff9f1c' : '#bca085';
-      ctx.fillText(`DEGRADATION: ${fatiguePct}%`, w - 130, 20);
+      ctx.fillStyle = detailColor;
+      ctx.fillText(detailText, w - 240, 20);
 
       ctx.restore();
     }

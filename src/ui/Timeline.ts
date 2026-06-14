@@ -6,14 +6,12 @@ export class Timeline {
   public isPlaying: boolean = false;
   private playIntervalId: number | null = null;
   private onRenderFrameCallback: (frame: ShotFrame, index: number, frames: ShotFrame[]) => void;
-  private onCleanBoreCallback: () => void;
 
   // DOM Elements
   private slider = document.getElementById('timeline-slider') as HTMLInputElement;
   private btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
   private playIcon = document.getElementById('play-icon') as HTMLSpanElement;
   private playText = document.getElementById('play-text') as HTMLSpanElement;
-  private btnCleanBore = document.getElementById('btn-clear-soot') as HTMLButtonElement;
 
   // Stat boxes
   private statStage = document.getElementById('stat-stage') as HTMLSpanElement;
@@ -22,11 +20,9 @@ export class Timeline {
   private statVelocity = document.getElementById('stat-velocity') as HTMLSpanElement;
 
   constructor(
-    onRender: (frame: ShotFrame, index: number, frames: ShotFrame[]) => void,
-    onCleanBore: () => void
+    onRender: (frame: ShotFrame, index: number, frames: ShotFrame[]) => void
   ) {
     this.onRenderFrameCallback = onRender;
-    this.onCleanBoreCallback = onCleanBore;
     this.initEventListeners();
   }
 
@@ -45,15 +41,6 @@ export class Timeline {
       } else {
         this.play();
       }
-    });
-
-    // Clean Bore click
-    this.btnCleanBore.addEventListener('click', () => {
-      this.onCleanBoreCallback();
-      this.btnCleanBore.textContent = '🧹 BORE CLEANED!';
-      setTimeout(() => {
-        this.btnCleanBore.textContent = '🧹 CLEAN BORE';
-      }, 1500);
     });
   }
 

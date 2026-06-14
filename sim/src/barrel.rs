@@ -44,6 +44,15 @@ impl BarrelProperties {
         }
     }
 
+    pub fn get_thermal_properties(&self) -> (f64, f64, f64, f64) {
+        // Returns (alpha_expansion, heat_capacity, mass, t_limit)
+        match self.name {
+            "Bamboo" => (5e-6, 1200.0, 0.3, 450.0),
+            "Wrought Iron Staves" => (12e-6, 450.0, 1.8, 1800.0),
+            _ => (18e-6, 380.0, 2.4, 1200.0), // Bronze
+        }
+    }
+
     /// Calculate the von Mises stress at the inner wall using closed-cylinder equations for thick-walled cylinders.
     /// Returns stress in MPa.
     pub fn calculate_von_mises_stress(&self, pressure_mpa: f64, fatigue: f64) -> f64 {
@@ -60,8 +69,30 @@ impl BarrelProperties {
         nominal_stress * active_flaw_factor
     }
 
-    /// Evaluates if the barrel fails under the given stress (in MPa).
-    /// Returns (is_ruptured, is_deformed)
+    /// Evaluates if the barrel fails under the given stress (in MPa) taking temperature into account.
+    /// Returns (is_ruptured, is_deformed, dynamic_yield, dynamic_ultimate)
+    pub fn evaluate_failure_thermal(&self, stress_mpa: f64, barrel_temp: f64) -> (bool, bool, f64, f64) {
+        let (_, _, _, t_limit) = self.get_thermal_properties();
+        
+        // Decay calculation
+        let temp_ratio = ((barrel_temp - 293.15) / (t_limit - 293.15)).clamp(0.0, 1.0);
+        let strength_sens = match self.name {
+            "Bamboo" => 1.8,
+            "Wrought Iron Staves" => 0.65,
+            _ => 0.85, // Bronze
+        };
+        
+        let strength_mult = (1.0 - strength_sens * temp_ratio * temp_ratio).max(0.1);
+        
+        let dynamic_yield = self.yield_strength * strength_mult;
+        let dynamic_ultimate = self.ultimate_strength * strength_mult;
+        
+        let is_ruptured = stress_mpa >= dynamic_ultimate;
+        let is_deformed = stress_mpa >= dynamic_yield && !is_ruptured;
+        
+        (is_ruptured, is_deformed, dynamic_yield, dynamic_ultimate)
+    }
+
     pub fn evaluate_failure(&self, stress_mpa: f64) -> (bool, bool) {
         let is_ruptured = stress_mpa >= self.ultimate_strength;
         let is_deformed = stress_mpa >= self.yield_strength && !is_ruptured;

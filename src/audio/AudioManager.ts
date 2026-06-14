@@ -839,7 +839,111 @@ export class AudioManager {
     });
   }
 
+  public playWetSwab() {
+    this.initContext();
+    if (!this.ctx || !this.noiseBuffer) return;
+    const time = this.ctx.currentTime;
+    
+    // 1. Swiping sound (similar to playCleanBore)
+    const sweep = this.ctx.createOscillator();
+    sweep.type = 'triangle';
+    sweep.frequency.setValueAtTime(500, time);
+    sweep.frequency.linearRampToValueAtTime(150, time + 0.6);
+
+    const sweepGain = this.ctx.createGain();
+    sweepGain.gain.setValueAtTime(0.05, time);
+    sweepGain.gain.linearRampToValueAtTime(0.0001, time + 0.6);
+
+    sweep.connect(sweepGain);
+    sweepGain.connect(this.ctx.destination);
+    sweep.start(time);
+    sweep.stop(time + 0.62);
+
+    // 2. Sizzling steam sound
+    const sizzle = this.ctx.createBufferSource();
+    sizzle.buffer = this.noiseBuffer;
+    
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(2200, time);
+
+    const sizzleGain = this.ctx.createGain();
+    sizzleGain.gain.setValueAtTime(0.08, time + 0.1);
+    sizzleGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.7);
+
+    sizzle.connect(filter);
+    filter.connect(sizzleGain);
+    sizzleGain.connect(this.ctx.destination);
+    sizzle.start(time + 0.05);
+    sizzle.stop(time + 0.72);
+  }
+
+  public playDrySwab() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    const sweep = this.ctx.createOscillator();
+    sweep.type = 'triangle';
+    sweep.frequency.setValueAtTime(400, time);
+    sweep.frequency.linearRampToValueAtTime(250, time + 0.45);
+
+    const gainNode = this.ctx.createGain();
+    gainNode.gain.setValueAtTime(0.05, time);
+    gainNode.gain.linearRampToValueAtTime(0.0001, time + 0.45);
+
+    sweep.connect(gainNode);
+    gainNode.connect(this.ctx.destination);
+    sweep.start();
+    sweep.stop(time + 0.47);
+  }
+
+  public playBushVent() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    // Simulate 3 metallic taps
+    for (let i = 0; i < 3; i++) {
+      const tapTime = time + i * 0.15;
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1000 - i * 150, tapTime);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.06 - i * 0.015, tapTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, tapTime + 0.08);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(tapTime);
+      osc.stop(tapTime + 0.09);
+    }
+  }
+
+  public playCoolingCreak() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    // High pitch, sharp, short creaks
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1800, time);
+    osc.frequency.exponentialRampToValueAtTime(800, time + 0.12);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.02, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(time + 0.16);
+  }
+
   // --- Stop & Cleanup Helpers ---
+
 
   public stopContinuousSounds() {
     this.stopSizzle();

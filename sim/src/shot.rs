@@ -18,8 +18,14 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let barrel_length = 0.30; // 30 cm barrel length
     let bore_radius = barrel.r_inner;
     let bore_area = std::f64::consts::PI * bore_radius * bore_radius;
-    let touchhole_radius = 0.001; // 1mm radius = 2mm diameter touchhole
-    let touchhole_area = std::f64::consts::PI * touchhole_radius * touchhole_radius;
+
+    // Read persistent thermal and maintenance inputs
+    let persistent_temp = input.persistent_temperature.unwrap_or(293.15);
+    let is_swabbed_wet = input.is_swabbed_wet.unwrap_or(false);
+    let mut touchhole_erosion = input.touchhole_erosion.unwrap_or(0.0);
+
+    let current_touchhole_radius = 0.001 * (1.0 + touchhole_erosion);
+    let touchhole_area = std::f64::consts::PI * current_touchhole_radius * current_touchhole_radius;
 
     // Projectile Setup
     let (proj_mass, proj_radius, drag_coeff, _is_arrow, _is_gravel, shape_regularity) = match input.projectile_type.as_str() {
@@ -46,7 +52,12 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
     // weather parameters
     let wind_disturbance = input.weather_wind / 100.0;
-    let humidity_slowdown = input.weather_humidity / 100.0;
+    let weather_humidity_adjusted = if is_swabbed_wet {
+        (input.weather_humidity + 30.0).min(100.0)
+    } else {
+        input.weather_humidity
+    };
+    let humidity_slowdown = weather_humidity_adjusted / 100.0;
 
     // Propellant consistency & burn profiles (made mutable for custom mix overrides)
     let (mut burn_profile_code, mut is_corned, mut initial_grain_r, mut burn_rate_mult, mut initial_gas_yield, is_damp) = match input.propellant_profile.as_str() {
@@ -118,7 +129,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let n_K_res = n_K_rem2;
 
     // Wet weather reaction conversions
-    let alpha_wet = 0.35 * (input.weather_humidity / 100.0);
+    let alpha_wet = 0.35 * (weather_humidity_adjusted / 100.0);
     let delta_n = alpha_wet * n_K2S;
     
     let n_K2S_final = n_K2S - delta_n;
@@ -268,42 +279,66 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         _ => {}
     }
 
-    // 2. Determine Ignition Delay (in ms)
-    let base_ignition_delay = 2.0; // ms
-    let weather_ignition_delay = humidity_slowdown * 8.0;
-    let skill_ignition_delay = ((100.0 - input.priming_quality) * 0.15).max(0.0);
-    let damp_ignition_delay = if is_damp { 8.0 } else { 0.0 };
-    let fouling_ignition_delay = input.persistent_fouling * 6.0;
-    
-    let mut total_ignition_delay = base_ignition_delay 
-        + weather_ignition_delay 
-        + skill_ignition_delay 
-        + damp_ignition_delay 
-        + fouling_ignition_delay 
-        + protection_delay
-        + rng.gen_range(0.0..1.5);
+    // 2. Determine Ignition Delay (in ms) and Cook-off Checks
+    let is_thermal_cookoff = persistent_temp > 540.0;
+    let ember_roll: f64 = rng.gen();
+    // Ember cook-off chance scales if fouling is above 0.6
+    let is_ember_cookoff = input.persistent_fouling > 0.6 && ember_roll < (input.persistent_fouling - 0.6) * 0.4;
+    let is_cookoff = is_thermal_cookoff || is_ember_cookoff;
+    let mut cookoff_aim_jitter_penalty = 0.0;
+
+    let mut total_ignition_delay = if is_cookoff {
+        cookoff_aim_jitter_penalty = 5.0;
+        0.2 + rng.gen_range(0.0..0.4) // fast auto-ignition
+    } else {
+        let base_ignition_delay = 2.0; // ms
+        let weather_ignition_delay = humidity_slowdown * 8.0;
+        let skill_ignition_delay = ((100.0 - input.priming_quality) * 0.15).max(0.0);
+        let damp_ignition_delay = if is_damp { 8.0 } else { 0.0 };
+        let fouling_ignition_delay = input.persistent_fouling * 6.0;
+        
+        base_ignition_delay 
+            + weather_ignition_delay 
+            + skill_ignition_delay 
+            + damp_ignition_delay 
+            + fouling_ignition_delay 
+            + protection_delay
+            + rng.gen_range(0.0..1.5)
+    };
     
     // Clamp to minimum of 0.1 ms to prevent division-by-zero or negative values
     total_ignition_delay = total_ignition_delay.max(0.1);
 
     // 3. Evaluate weather misfire probabilities using Physics formulas
-    let rain_frac = input.weather_rain / 100.0;
-    let wind_frac = input.weather_wind / 100.0;
+    let (is_rain_misfire, is_wind_misfire, is_dud, weather_misfire) = if is_cookoff {
+        (false, false, false, false)
+    } else {
+        let rain_frac = input.weather_rain / 100.0;
+        let wind_frac = input.weather_wind / 100.0;
 
-    let eta_rain = 1.0 - rain_coeff;
-    let eta_wind = 1.0 - wind_coeff;
+        let eta_rain = 1.0 - rain_coeff;
+        let eta_wind = 1.0 - wind_coeff;
 
-    let wet_prob = 1.0 - (-0.25 * rain_frac * (1.0 - eta_rain) * total_ignition_delay).exp();
-    let blown_prob = 1.0 - (-0.03 * wind_frac * wind_frac * (1.0 - eta_wind) * total_ignition_delay).exp();
+        let wet_prob = 1.0 - (-0.25 * rain_frac * (1.0 - eta_rain) * total_ignition_delay).exp();
+        let blown_prob = 1.0 - (-0.03 * wind_frac * wind_frac * (1.0 - eta_wind) * total_ignition_delay).exp();
 
-    let roll_wet: f64 = rng.gen();
-    let roll_blown: f64 = rng.gen();
+        let roll_wet: f64 = rng.gen();
+        let roll_blown: f64 = rng.gen();
 
-    let is_rain_misfire = roll_wet < wet_prob;
-    let is_wind_misfire = roll_blown < blown_prob;
+        let rain_m = roll_wet < wet_prob;
+        let wind_m = roll_blown < blown_prob;
 
-    let is_dud = input.priming_quality < 15.0 || (input.persistent_fouling > 0.9 && is_damp);
-    let weather_misfire = is_rain_misfire || is_wind_misfire;
+        let dud = input.priming_quality < 15.0 || (input.persistent_fouling > 0.9 && is_damp);
+        (rain_m, wind_m, dud, rain_m || wind_m)
+    };
+
+    if is_cookoff {
+        if is_thermal_cookoff {
+            outcomes.push("cook_off_thermal".to_string());
+        } else {
+            outcomes.push("cook_off_ember".to_string());
+        }
+    }
 
     if is_dud || weather_misfire {
         if is_rain_misfire {
@@ -316,6 +351,16 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
         let total_misfire_duration = total_ignition_delay + 2.0;
         let misfire_steps = (total_misfire_duration / dt) as usize;
+
+        // Calculate initial structural strength
+        let (_, _, _, t_limit) = barrel.get_thermal_properties();
+        let temp_ratio = ((persistent_temp - 293.15) / (t_limit - 293.15)).clamp(0.0, 1.0);
+        let strength_sens = match barrel.name {
+            "Bamboo" => 1.8,
+            "Wrought Iron Staves" => 0.65,
+            _ => 0.85,
+        };
+        let structural_strength_pct = (1.0 - strength_sens * temp_ratio * temp_ratio).max(0.1) * 100.0;
 
         for step in 0..misfire_steps {
             let step_time = step as f64 * dt;
@@ -364,6 +409,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 fouling_index: input.persistent_fouling,
                 burn_profile_code,
                 barrel_fatigue: input.persistent_fatigue,
+                barrel_temperature: persistent_temp,
+                structural_strength_pct,
+                touchhole_radius_current: current_touchhole_radius,
             });
         }
 
@@ -392,6 +440,18 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let mut is_ruptured = false;
     let mut is_deformed = false;
 
+    let mut barrel_temp = persistent_temp;
+
+    // Calculate initial structural strength
+    let (_, _, _, t_limit) = barrel.get_thermal_properties();
+    let temp_ratio = ((persistent_temp - 293.15) / (t_limit - 293.15)).clamp(0.0, 1.0);
+    let strength_sens = match barrel.name {
+        "Bamboo" => 1.8,
+        "Wrought Iron Staves" => 0.65,
+        _ => 0.85,
+    };
+    let initial_structural_strength_pct = (1.0 - strength_sens * temp_ratio * temp_ratio).max(0.1) * 100.0;
+
     // Simulation loop
     for step in 0..total_steps {
         time_ms = step as f64 * dt;
@@ -402,6 +462,13 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             stage = "ignition".to_string();
             let ignition_progress = time_ms / total_ignition_delay;
             let temp_now = 293.15 + (temp_ignition - 293.15) * ignition_progress;
+            
+            if is_cookoff {
+                step_warnings.push("UNCONTROLLED THERMAL IGNITION (COOK-OFF)".to_string());
+            } else {
+                step_warnings.push("Priming powder burning...".to_string());
+            }
+
             frames.push(ShotFrame {
                 t: 0.0,
                 time_ms,
@@ -415,7 +482,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 smoke: 0.05 * ignition_progress,
                 fouling: total_soot_fouling * 500.0,
                 aim_offset: 0.0,
-                warnings: vec!["Priming powder burning...".to_string()],
+                warnings: step_warnings,
                 unburned_mass: propellant_mass,
                 gas_mass: 0.0,
                 temperature: temp_now,
@@ -424,6 +491,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 fouling_index: input.persistent_fouling,
                 burn_profile_code,
                 barrel_fatigue: input.persistent_fatigue,
+                barrel_temperature: barrel_temp,
+                structural_strength_pct: initial_structural_strength_pct,
+                touchhole_radius_current: current_touchhole_radius,
             });
             current_temp = temp_now;
             chamber_energy = gas_mass * cv * current_temp;
@@ -433,6 +503,11 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
         // Stage 2: Pressure building & Movement
         if !has_exited && !is_ruptured {
             stage = if is_moving { "movement".to_string() } else { "pressure".to_string() };
+
+            let (alpha_expansion, heat_cap, barrel_mass, _) = barrel.get_thermal_properties();
+            let expansion_factor = (1.0 + alpha_expansion * (barrel_temp - 293.15)).min(1.05);
+            let current_bore_radius = bore_radius * expansion_factor;
+            let current_bore_area = std::f64::consts::PI * current_bore_radius * current_bore_radius;
 
             // Propellant burn rate
             let burn_modifier = (1.0 - humidity_slowdown * 0.3) * (0.5 + 0.5 * (input.refinement_level / 100.0)) * burn_rate_mult;
@@ -489,8 +564,8 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
             // Volumetric work done
             let initial_vol = 0.000010; // 10cc chamber
-            let prev_chamber_vol = initial_vol + bore_area * (proj_x - proj_v * (dt / 1000.0)).max(0.0);
-            let chamber_vol = initial_vol + bore_area * proj_x;
+            let prev_chamber_vol = initial_vol + current_bore_area * (proj_x - proj_v * (dt / 1000.0)).max(0.0);
+            let chamber_vol = initial_vol + current_bore_area * proj_x;
             let d_vol = (chamber_vol - prev_chamber_vol).max(0.0);
             let work_done = (pressure - 0.1).max(0.0) * 1_000_000.0 * d_vol; // in Joules
 
@@ -502,15 +577,22 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             let choked_factor = choked_constant / rt_sqrt;
             let pressure_pa = pressure * 1_000_000.0;
 
-            let mut active_gap_area = gap_area;
+            // Dynamic windage gap area based on thermal expansion
+            let current_gap_area = if effective_proj_radius >= current_bore_radius {
+                0.0
+            } else {
+                std::f64::consts::PI * (current_bore_radius * current_bore_radius - effective_proj_radius * effective_proj_radius)
+            };
+
+            let mut active_gap_area = current_gap_area;
             if input.persistent_fatigue > 0.4 {
                 // Fissures bleed additional chamber pressure (adds to gap area)
                 let gap_mult = 1.0 + 1.5 * input.persistent_fatigue;
-                active_gap_area = if gap_area > 0.0 {
-                    gap_area * gap_mult
+                active_gap_area = if current_gap_area > 0.0 {
+                    current_gap_area * gap_mult
                 } else {
                     // even if perfect seal, fissure leaks gas
-                    std::f64::consts::PI * (bore_radius * bore_radius - (bore_radius - 0.0003).powi(2)) * (gap_mult - 1.0)
+                    std::f64::consts::PI * (current_bore_radius * current_bore_radius - (current_bore_radius - 0.0003).powi(2)) * (gap_mult - 1.0)
                 };
             }
 
@@ -520,8 +602,18 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 0.0
             };
 
+            // Touchhole vent erosion
+            if pressure > 0.1 {
+                let sulfur_erosion_mult = if custom_mix_active { 1.0 + sulfur_ratio } else { 1.10 };
+                let erosion_rate = 0.0000005 * pressure * sulfur_erosion_mult;
+                touchhole_erosion += erosion_rate * dt;
+            }
+
+            let current_touchhole_radius = 0.001 * (1.0 + touchhole_erosion);
+            let current_touchhole_area = std::f64::consts::PI * current_touchhole_radius * current_touchhole_radius;
+
             let touchhole_leak = if pressure > 0.1 {
-                c_leak * touchhole_area * pressure_pa * choked_factor * (dt / 1000.0)
+                c_leak * current_touchhole_area * pressure_pa * choked_factor * (dt / 1000.0)
             } else {
                 0.0
             };
@@ -532,10 +624,14 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
 
             leakage_rate = actual_leak / dt;
 
-            // Continuous wall cooling
-            let a_bore = 2.0 * std::f64::consts::PI * bore_radius * (0.05 + proj_x);
-            let q_lost = h_material * a_bore * (current_temp - 293.15).max(0.0) * (dt / 1000.0);
+            // Continuous wall cooling using dynamic barrel temperature
+            let a_bore = 2.0 * std::f64::consts::PI * current_bore_radius * (0.05 + proj_x);
+            let q_lost = h_material * a_bore * (current_temp - barrel_temp).max(0.0) * (dt / 1000.0);
             accumulated_heat_loss += q_lost;
+
+            // Update barrel temperature rise (scaled for gameplay responsiveness)
+            let d_temp_barrel = 120.0 * q_lost / (barrel_mass * heat_cap);
+            barrel_temp += d_temp_barrel;
 
             // Energy update
             let energy_added = gas_generated * cv * temp_ignition;
@@ -561,13 +657,13 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             pressure = pressure.max(0.1);
 
             // Pre-projectile nose compression pressure calculations
-            let v_front = (bore_area * (barrel_length - proj_x)).max(0.000001);
+            let v_front = (current_bore_area * (barrel_length - proj_x)).max(0.000001);
             let d_m_leak_dt = leakage_rate * 1000.0; // kg/s
             let p_front_pa = 101325.0 + (287.05 * 293.15 * d_m_leak_dt / v_front) * (dt / 1000.0); // compression equation
             let p_front = (p_front_pa / 1_000_000.0).clamp(0.0, pressure * 0.95);
 
             // Force balance with nose pressure
-            let force_pressure = (pressure - p_front) * 1_000_000.0 * bore_area;
+            let force_pressure = (pressure - p_front) * 1_000_000.0 * current_bore_area;
 
             if input.projectile_type == "none" {
                 is_moving = false;
@@ -608,7 +704,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             let hoop_stress = barrel.calculate_von_mises_stress(pressure, input.persistent_fatigue);
             peak_stress = peak_stress.max(hoop_stress);
 
-            let (ruptured, deformed) = barrel.evaluate_failure(hoop_stress);
+            let (ruptured, deformed, dynamic_yield, dynamic_ultimate) = barrel.evaluate_failure_thermal(hoop_stress, barrel_temp);
+            let structural_strength_pct = (dynamic_yield / barrel.yield_strength) * 100.0;
+
             if ruptured {
                 is_ruptured = true;
                 outcomes.push("barrel_failure".to_string());
@@ -649,6 +747,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 fouling_index: fouling_index_now,
                 burn_profile_code,
                 barrel_fatigue: input.persistent_fatigue,
+                barrel_temperature: barrel_temp,
+                structural_strength_pct,
+                touchhole_radius_current: current_touchhole_radius,
             });
 
             if is_ruptured {
@@ -722,6 +823,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 fouling_index: fouling_index_now,
                 burn_profile_code,
                 barrel_fatigue: final_fatigue,
+                barrel_temperature: barrel_temp,
+                structural_strength_pct: (barrel.evaluate_failure_thermal(0.0, barrel_temp).2 / barrel.yield_strength) * 100.0,
+                touchhole_radius_current: 0.001 * (1.0 + touchhole_erosion),
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
@@ -754,6 +858,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
                 fouling_index: fouling_index_now,
                 burn_profile_code,
                 barrel_fatigue: final_fatigue,
+                barrel_temperature: barrel_temp,
+                structural_strength_pct: (barrel.evaluate_failure_thermal(0.0, barrel_temp).2 / barrel.yield_strength) * 100.0,
+                touchhole_radius_current: 0.001 * (1.0 + touchhole_erosion),
             });
         }
         return diagnosis::generate_result(input, frames, outcomes);
@@ -796,7 +903,7 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
     let theta_x = a_sway * ((angle_t * 0.85 + phi1).sin() + 0.35 * (angle_t * 2.41 + phi2).sin() + 0.12 * (angle_t * 5.83 + phi3).sin());
     let theta_y = a_sway * ((angle_t * 0.95 + phi4).cos() + 0.35 * (angle_t * 2.13 + phi5).cos() + 0.12 * (angle_t * 6.11 + phi6).cos());
     
-    let aim_jitter = theta_x + fixed_bias + rng.gen_range(-base_jitter..base_jitter);
+    let aim_jitter = theta_x + fixed_bias + rng.gen_range(-base_jitter..base_jitter) + cookoff_aim_jitter_penalty;
 
     let target_distance = 35.0;
     let mut flight_x = 0.0;
@@ -920,6 +1027,9 @@ pub fn run_simulation(input: ShotInput) -> ShotResult {
             fouling_index: fouling_index_now,
             burn_profile_code,
             barrel_fatigue: final_fatigue,
+            barrel_temperature: barrel_temp,
+            structural_strength_pct: (barrel.evaluate_failure_thermal(0.0, barrel_temp).2 / barrel.yield_strength) * 100.0,
+            touchhole_radius_current: 0.001 * (1.0 + touchhole_erosion),
         });
     }
 
